@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -19,22 +20,35 @@ import (
 var _logChanQueue =make(chan string,10000)
 var _logFileTempChan =make(chan string,1000)
 var _logServerOk =make(chan bool)
-var _logServerUrl=""
-var _logFileName="glog"
 
+
+var _Url =""
+var _LogFileName ="glog"
+var _Debug =true
+var _PrintStack =false
+
+
+
+var _glogOut =log.New(os.Stdout,"[TRACE] ",log.LstdFlags|log.LUTC|log.Llongfile)
+var _glogErr =log.New(os.Stderr,"[ERROR] ",log.LstdFlags|log.LUTC|log.Llongfile)
 
 
 func Trace(v ...interface{}) {
-
-	_, file, line, _ := runtime.Caller(1)
-
+	_, file, line, ok := runtime.Caller(1)
+	if !ok{
+		file = "unknown"
+		line = 0
+	}
+	if _Debug{
+		 _glogOut.Output(2, fmt.Sprintln(v...))
+	}
 	go func(_file string, _line int,_v []interface{}) {
 		//util.Trace(funcName,file,line,ok)
 		for _, va := range _v {
 			if va != nil {
 
 
-				b,_:=json.Marshal(map[string]interface{}{"Time":time.Now().Format("2006-01-02 15:04:05"),"File":_file,"Line":_line,"Trace":va})
+				b,_:=json.Marshal(map[string]interface{}{"Time":time.Now().Format("2006-01-02 15:04:05"),"File":_file,"Line":_line,"TRACE":va})
 				//conf.LogQueue=append(conf.LogQueue,string(b))
 				_logChanQueue<-string(b)
 				//log.Println(file, line, va)
@@ -48,15 +62,22 @@ func Trace(v ...interface{}) {
 
 func Error(err error) bool {
 	if err != nil {
-		_, file, line, _ := runtime.Caller(1)
+		_, file, line, ok := runtime.Caller(1)
+		if !ok{
+			file = "unknown"
+			line = 0
+		}
+		if _Debug{
+			_glogErr.Output(2, fmt.Sprintln(err))
+			if _PrintStack{
+				debug.PrintStack()
+			}
+		}
 
 		go func(_file string, _line int,_err error) {
 			//util.Trace(funcName,file,line,ok)
-
-
-
 				//log.Println(file, line, err)
-				b,_:=json.Marshal(map[string]interface{}{"Time":time.Now().Format("2006-01-02 15:04:05"),"File":_file,"Line":_line,"Error":_err})
+				b,_:=json.Marshal(map[string]interface{}{"Time":time.Now().Format("2006-01-02 15:04:05"),"File":_file,"Line":_line,"ERROR":_err})
 				//conf.LogQueue=append(conf.LogQueue,string(b))
 				_logChanQueue<-string(b)
 
@@ -77,7 +98,7 @@ func init()  {
 
 			go func(_v string) {
 
-				if strings.EqualFold(_logServerUrl,""){
+				if strings.EqualFold(_Url,""){
 					_logFileTempChan<-_v
 					return
 				}
@@ -85,17 +106,17 @@ func init()  {
 				client.Timeout=3*time.Second
 				//log.Println(_v)
 				buffer := bytes.NewBufferString(_v)
-				request,err := http.NewRequest("POST", _logServerUrl, buffer)
+				request,err := http.NewRequest("POST", _Url, buffer)
 				//response,err:=http.Post(conf.Config.LogServer, "text/plain", buffer)
 				if err!=nil{
-					log.Println(err)
+					log.Panicln(err)
 					_logServerOk<-false
 					_logFileTempChan<-_v
-
 				}else{
 					response,err:=client.Do(request)
 					if err!=nil{
-						log.Println(err)
+						//log.Panicln(err)
+						//log.Println(err)
 						_logServerOk<-false
 						_logFileTempChan<-_v
 						return
@@ -120,7 +141,7 @@ func init()  {
 					if m["Success"]!=nil && m["Message"]!=nil{
 
 						if m["Success"].(bool)==false{
-							log.Println(m["Message"].(string))
+							//log.Println(m["Message"].(string))
 							_logFileTempChan<-_v
 							return
 						}
@@ -141,7 +162,7 @@ func init()  {
 	//日志服务
 	go func() {
 
-		logFileName:=_logFileName+"_glog_"+time.Now().Format("2006_01_02")+".log"
+		logFileName:=_LogFileName+"_glog_"+time.Now().Format("2006_01_02")+".log"
 
 		var logFile *os.File
 		logFile,_= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
@@ -203,10 +224,9 @@ func init()  {
 
 	_logServerOk<-true
 }
-func NewLogger(params struct{
-	Url string
-	LogFileName string
-	Debug bool
-})  {
-	_logServerUrl =url
+func NewLogger(Url string,LogFileName string,Debug bool,PrintStack bool){
+	_Url =Url
+	_LogFileName =LogFileName
+	_Debug =Debug
+	_PrintStack =PrintStack
 }
