@@ -13,9 +13,11 @@
 
 # post例子：
 
+(```)
 POST /log/server HTTP/1.1
 Host: www.abc.com
 Content-Type: application/json
 Cache-Control: no-cache
 
 {"JSON":"text"}
+(```)
