@@ -22,24 +22,33 @@ var _logFileTempChan =make(chan string,1000)
 var _logServerOk =make(chan bool)
 
 
-var _Url =""
-var _LogFileName ="glog"
-var _Debug =true
-var _PrintStack =false
+var Param = &ParamValue{
+	ServerUrl:"",
+	ServerName:"default",
+	LogFileName:"glog",
+	Debug:true,
+	PrintStack:false,
+}
 
 
 
 var _glogOut =log.New(os.Stdout,"[TRACE] ",log.LstdFlags|log.LUTC|log.Llongfile)
 var _glogErr =log.New(os.Stderr,"[ERROR] ",log.LstdFlags|log.LUTC|log.Llongfile)
+var _glogDebug =log.New(os.Stdout,"[DEBUG] ",log.LstdFlags|log.LUTC|log.Llongfile)
 
+func Debug(v ...interface{})  {
+	if Param.Debug{
+		_glogDebug.Output(2, fmt.Sprintln(v...))
+	}
 
+}
 func Trace(v ...interface{}) {
 	_, file, line, ok := runtime.Caller(1)
 	if !ok{
 		file = "unknown"
 		line = 0
 	}
-	if _Debug{
+	if Param.Debug{
 		 _glogOut.Output(2, fmt.Sprintln(v...))
 	}
 	go func(_file string, _line int,_v []interface{}) {
@@ -48,7 +57,31 @@ func Trace(v ...interface{}) {
 			if va != nil {
 
 
-				b,_:=json.Marshal(map[string]interface{}{"Time":time.Now().Format("2006-01-02 15:04:05"),"File":_file,"Line":_line,"TRACE":va})
+				//NumGoroutine:=runtime.NumGoroutine()
+				//GOOS:=runtime.GOOS
+				//mem:=&runtime.MemStats{}
+				//runtime.ReadMemStats(mem)
+
+				/*memAll:=0
+				memFree:=0
+				memUsed:=0
+
+				sysInfo := new(syscall.sys)
+				err := syscall.Sysinfo(sysInfo)
+				if err == nil {
+					memAll = sysInfo.Totalram * uint32(syscall.Getpagesize())
+					memFree = sysInfo.Freeram * uint32(syscall.Getpagesize())
+					memUsed = memAll - memUsed
+				}*/
+
+
+				b,_:=json.Marshal(map[string]interface{}{
+					"Time":time.Now().Format("2006-01-02 15:04:05"),
+					"File":_file,
+					"Line":_line,
+					"TRACE":va,
+					"ServerName":Param.ServerName,
+				})
 				//conf.LogQueue=append(conf.LogQueue,string(b))
 				_logChanQueue<-string(b)
 				//log.Println(file, line, va)
@@ -67,9 +100,9 @@ func Error(err error) bool {
 			file = "unknown"
 			line = 0
 		}
-		if _Debug{
+		if Param.Debug{
 			_glogErr.Output(2, fmt.Sprintln(err))
-			if _PrintStack{
+			if Param.PrintStack{
 				debug.PrintStack()
 			}
 		}
@@ -77,7 +110,13 @@ func Error(err error) bool {
 		go func(_file string, _line int,_err error) {
 			//util.Trace(funcName,file,line,ok)
 				//log.Println(file, line, err)
-				b,_:=json.Marshal(map[string]interface{}{"Time":time.Now().Format("2006-01-02 15:04:05"),"File":_file,"Line":_line,"ERROR":_err})
+				b,_:=json.Marshal(map[string]interface{}{
+					"Time":time.Now().Format("2006-01-02 15:04:05"),
+					"File":_file,
+					"Line":_line,
+					"ERROR":_err,
+					"ServerName":Param.ServerName,
+				})
 				//conf.LogQueue=append(conf.LogQueue,string(b))
 				_logChanQueue<-string(b)
 
@@ -91,6 +130,8 @@ func Error(err error) bool {
 }
 func init()  {
 
+
+
 	//日志服务
 	go func() {
 
@@ -98,7 +139,7 @@ func init()  {
 
 			go func(_v string) {
 
-				if strings.EqualFold(_Url,""){
+				if strings.EqualFold(Param.ServerUrl,""){
 					_logFileTempChan<-_v
 					return
 				}
@@ -106,7 +147,7 @@ func init()  {
 				client.Timeout=3*time.Second
 				//log.Println(_v)
 				buffer := bytes.NewBufferString(_v)
-				request,err := http.NewRequest("POST", _Url, buffer)
+				request,err := http.NewRequest("POST", Param.ServerUrl, buffer)
 				//response,err:=http.Post(conf.Config.LogServer, "text/plain", buffer)
 				if err!=nil{
 					log.Panicln(err)
@@ -162,7 +203,7 @@ func init()  {
 	//日志服务
 	go func() {
 
-		logFileName:=_LogFileName+"_glog_"+time.Now().Format("2006_01_02")+".log"
+		logFileName:=Param.LogFileName+"_glog_"+time.Now().Format("2006_01_02")+".log"
 
 		var logFile *os.File
 		logFile,_= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
@@ -224,9 +265,16 @@ func init()  {
 
 	_logServerOk<-true
 }
-func NewLogger(Url string,LogFileName string,Debug bool,PrintStack bool){
-	_Url =Url
-	_LogFileName =LogFileName
-	_Debug =Debug
-	_PrintStack =PrintStack
+type ParamValue struct {
+	ServerUrl string
+	ServerName string
+	LogFileName string
+	Debug bool
+	PrintStack bool
+}
+func NewLogger(_param *ParamValue){
+	if _param!=nil{
+		Param = _param
+	}
+
 }
