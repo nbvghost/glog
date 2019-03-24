@@ -28,6 +28,7 @@ var Param = &ParamValue{
 	LogFileName:"glog",
 	Debug:true,
 	PrintStack:false,
+	FileStorage:false,
 }
 
 
@@ -252,10 +253,13 @@ func init()  {
 				}
 			case v :=<-_logFileTempChan:
 				//log.Println(v)
-				if logFile!=nil{
-					logFile.WriteString(fmt.Sprintf("%v\n", v))
-					logFile.Sync()
+				if Param.FileStorage{
+					if logFile!=nil{
+						logFile.WriteString(fmt.Sprintf("%v", v))
+						logFile.Sync()
+					}
 				}
+
 
 			}
 		}
@@ -263,7 +267,7 @@ func init()  {
 
 	}()
 
-	_logServerOk<-true
+	//_logServerOk<-true
 }
 type ParamValue struct {
 	ServerUrl string
@@ -271,6 +275,7 @@ type ParamValue struct {
 	LogFileName string
 	Debug bool
 	PrintStack bool
+	FileStorage bool
 }
 func NewLogger(_param *ParamValue){
 	if _param!=nil{
