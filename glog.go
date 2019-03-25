@@ -43,53 +43,50 @@ func Debug(v ...interface{})  {
 
 }
 func Trace(v ...interface{}) {
+	outText:=fmt.Sprintln(v...)
+
+	if strings.EqualFold(outText,""){
+		return
+	}
 	_, file, line, ok := runtime.Caller(1)
 	if !ok{
 		file = "unknown"
 		line = 0
 	}
 	if Param.Debug{
-		 _glogOut.Output(2, fmt.Sprintln(v...))
+		 _glogOut.Output(2, outText)
 	}
-	go func(_file string, _line int,_v []interface{}) {
-		//util.Trace(funcName,file,line,ok)
-		for _, va := range _v {
-			if va != nil {
+	go func(_file string, _line int,_v string) {
+		//NumGoroutine:=runtime.NumGoroutine()
+		//GOOS:=runtime.GOOS
+		//mem:=&runtime.MemStats{}
+		//runtime.ReadMemStats(mem)
+
+		/*memAll:=0
+		memFree:=0
+		memUsed:=0
+
+		sysInfo := new(syscall.sys)
+		err := syscall.Sysinfo(sysInfo)
+		if err == nil {
+			memAll = sysInfo.Totalram * uint32(syscall.Getpagesize())
+			memFree = sysInfo.Freeram * uint32(syscall.Getpagesize())
+			memUsed = memAll - memUsed
+		}*/
 
 
-				//NumGoroutine:=runtime.NumGoroutine()
-				//GOOS:=runtime.GOOS
-				//mem:=&runtime.MemStats{}
-				//runtime.ReadMemStats(mem)
+		b,_:=json.Marshal(map[string]interface{}{
+			"Time":time.Now().Format("2006-01-02 15:04:05"),
+			"File":_file,
+			"Line":_line,
+			"TRACE":_v,
+			"ServerName":Param.ServerName,
+		})
+		//conf.LogQueue=append(conf.LogQueue,string(b))
+		_logChanQueue<-string(b)
+		//log.Println(file, line, va)
 
-				/*memAll:=0
-				memFree:=0
-				memUsed:=0
-
-				sysInfo := new(syscall.sys)
-				err := syscall.Sysinfo(sysInfo)
-				if err == nil {
-					memAll = sysInfo.Totalram * uint32(syscall.Getpagesize())
-					memFree = sysInfo.Freeram * uint32(syscall.Getpagesize())
-					memUsed = memAll - memUsed
-				}*/
-
-
-				b,_:=json.Marshal(map[string]interface{}{
-					"Time":time.Now().Format("2006-01-02 15:04:05"),
-					"File":_file,
-					"Line":_line,
-					"TRACE":va,
-					"ServerName":Param.ServerName,
-				})
-				//conf.LogQueue=append(conf.LogQueue,string(b))
-				_logChanQueue<-string(b)
-				//log.Println(file, line, va)
-
-
-			}
-		}
-	}(file,line,v)
+	}(file,line,outText)
 
 }
 
