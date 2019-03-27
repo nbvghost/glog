@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -17,13 +16,22 @@ import (
 
 //queue
 //日志列对
-var _logChanQueue =make(chan string,10000)
+var _logChanQueue =make(chan string,100000)
 var _logFileTempChan =make(chan string,1000)
-var _logServerOk =make(chan bool)
+var _logServerStatus =make(chan bool)
 
 
+var glogServer =&TCP{}
+type ParamValue struct {
+	ServerAddr string
+	ServerName string
+	LogFileName string
+	Debug bool
+	PrintStack bool
+	FileStorage bool
+}
 var Param = &ParamValue{
-	ServerUrl:"",
+	ServerAddr:"",
 	ServerName:"default",
 	LogFileName:"glog",
 	Debug:true,
@@ -33,47 +41,45 @@ var Param = &ParamValue{
 
 
 
-var _glogOut =log.New(os.Stdout,"[TRACE] ",log.LstdFlags|log.LUTC|log.Llongfile)
-var _glogErr =log.New(os.Stderr,"[ERROR] ",log.LstdFlags|log.LUTC|log.Llongfile)
-var _glogDebug =log.New(os.Stdout,"[DEBUG] ",log.LstdFlags|log.LUTC|log.Llongfile)
+var _glogOut =log.New(os.Stdout,"[TRACE] ",log.LstdFlags|log.LUTC|log.Lshortfile)
+var _glogErr =log.New(os.Stderr,"[ERROR] ",log.LstdFlags|log.LUTC|log.Lshortfile)
+var _glogDebug =log.New(os.Stdout,"[DEBUG] ",log.LstdFlags|log.LUTC|log.Lshortfile)
 
+func Debugf(format string, v ...interface{})  {
+	if Param.Debug{
+		_glogDebug.Output(2, fmt.Sprintf(format,v...))
+	}
+}
 func Debug(v ...interface{})  {
 	if Param.Debug{
 		_glogDebug.Output(2, fmt.Sprintln(v...))
 	}
-
 }
 func Trace(v ...interface{}) {
-	outText:=fmt.Sprintln(v...)
-
-	if strings.EqualFold(outText,""){
-		return
-	}
+	//outText:=fmt.Sprintln(v...)
 	_, file, line, ok := runtime.Caller(1)
 	if !ok{
 		file = "unknown"
 		line = 0
 	}
 	if Param.Debug{
-		 _glogOut.Output(2, outText)
+		 _glogOut.Output(2, fmt.Sprintln(v...))
 	}
-	go func(_file string, _line int,_v string) {
-		//NumGoroutine:=runtime.NumGoroutine()
-		//GOOS:=runtime.GOOS
-		//mem:=&runtime.MemStats{}
-		//runtime.ReadMemStats(mem)
 
-		/*memAll:=0
-		memFree:=0
-		memUsed:=0
+	for index:=range v{
+		b,_:=json.Marshal(map[string]interface{}{
+			"Time":time.Now().Format("2006-01-02 15:04:05"),
+			"File":file,
+			"Line":line,
+			"TRACE":v[index],
+			"ServerName":Param.ServerName,
+		})
+		_logChanQueue<-string(b)
+	}
 
-		sysInfo := new(syscall.sys)
-		err := syscall.Sysinfo(sysInfo)
-		if err == nil {
-			memAll = sysInfo.Totalram * uint32(syscall.Getpagesize())
-			memFree = sysInfo.Freeram * uint32(syscall.Getpagesize())
-			memUsed = memAll - memUsed
-		}*/
+
+
+	/*go func(_file string, _line int,_v []interface{}) {
 
 
 		b,_:=json.Marshal(map[string]interface{}{
@@ -83,11 +89,10 @@ func Trace(v ...interface{}) {
 			"TRACE":_v,
 			"ServerName":Param.ServerName,
 		})
-		//conf.LogQueue=append(conf.LogQueue,string(b))
 		_logChanQueue<-string(b)
-		//log.Println(file, line, va)
 
-	}(file,line,outText)
+
+	}(file,line,v)*/
 
 }
 
@@ -104,8 +109,19 @@ func Error(err error) bool {
 				debug.PrintStack()
 			}
 		}
+		//log.Println(file, line, err)
+		b,_:=json.Marshal(map[string]interface{}{
+			"Time":time.Now().Format("2006-01-02 15:04:05"),
+			"File":file,
+			"Line":line,
+			"ERROR":err,
+			"ServerName":Param.ServerName,
+		})
+		//conf.LogQueue=append(conf.LogQueue,string(b))
+		_logChanQueue<-string(b)
 
-		go func(_file string, _line int,_err error) {
+
+		/*go func(_file string, _line int,_err error) {
 			//util.Trace(funcName,file,line,ok)
 				//log.Println(file, line, err)
 				b,_:=json.Marshal(map[string]interface{}{
@@ -119,7 +135,7 @@ func Error(err error) bool {
 				_logChanQueue<-string(b)
 
 
-		}(file,line,err)
+		}(file,line,err)*/
 
 		return true
 	}else{
@@ -128,79 +144,35 @@ func Error(err error) bool {
 }
 func init()  {
 
-
-
-	//日志服务
 	go func() {
-
-		for v := range _logChanQueue {
-
-			go func(_v string) {
-
-				if strings.EqualFold(Param.ServerUrl,""){
-					_logFileTempChan<-_v
-					return
-				}
-				client:=&http.Client{}
-				client.Timeout=3*time.Second
-				//log.Println(_v)
-				buffer := bytes.NewBufferString(_v)
-				request,err := http.NewRequest("POST", Param.ServerUrl, buffer)
-				//response,err:=http.Post(conf.Config.LogServer, "text/plain", buffer)
-				if err!=nil{
-					log.Panicln(err)
-					_logServerOk<-false
-					_logFileTempChan<-_v
-				}else{
-					response,err:=client.Do(request)
-					if err!=nil{
-						//log.Panicln(err)
-						//log.Println(err)
-						_logServerOk<-false
-						_logFileTempChan<-_v
-						return
-					}
-					//网络通了
-
-					_logServerOk<-true
-
-					//return &gweb.JsonResult{Data:map[string]interface{}{"Success":false,"Message":err.Error()}}
-					b,err:=ioutil.ReadAll(response.Body)
-					if err!=nil{
-						_logFileTempChan<-_v
-						return
-					}
-					defer response.Body.Close()
-					m:=make(map[string]interface{})
-					err=json.Unmarshal(b,&m)
-					if err!=nil{
-						_logFileTempChan<-_v
-						return
-					}
-					if m["Success"]!=nil && m["Message"]!=nil{
-
-						if m["Success"].(bool)==false{
-							//log.Println(m["Message"].(string))
-							_logFileTempChan<-_v
-							return
-						}
-
-					}else{
-						_logFileTempChan<-_v
-						return
-					}
-
-				}
-
-			}(v)
-
+		<-_startChan
+		if strings.EqualFold(Param.ServerAddr,"")==false{
+			glogServer.StartTCP(Param.ServerAddr,_logServerStatus)
 		}
+
+
+
 
 	}()
 
 	//日志服务
 	go func() {
 
+		for v := range _logChanQueue {
+
+			if strings.EqualFold(Param.ServerAddr,"")==false{
+				err:=glogServer.Write(v)
+				if err!=nil{
+					_logFileTempChan<-v
+				}
+			}
+		}
+
+	}()
+
+	//日志服务
+	go func() {
+		<-_startChan
 		logFileName:=Param.LogFileName+"_glog_"+time.Now().Format("2006_01_02")+".log"
 
 		var logFile *os.File
@@ -214,30 +186,34 @@ func init()  {
 
 				logFile,_= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
 
-			case v:=<-_logServerOk:
+			case v:=<-_logServerStatus:
 
 				if v{
-					if isLogServerOk==false{
-						bf,err:=ioutil.ReadAll(logFile)
-						if err!=nil{
-							return
-						}
-						fd := bytes.NewBuffer(bf)
-						logFile.Close()
-						for{
-							l, err := fd.ReadString('\n')
-							if err != nil {
-								if err == io.EOF {
-									lf, _ := os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.ModePerm)
-									log.Println(lf.Truncate(0))
-									lf.Sync()
-									lf.Close()
-									logFile, _ = os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
-								}
-								break
+
+					bf,err:=ioutil.ReadAll(logFile)
+					if err!=nil{
+						return
+					}
+					fd := bytes.NewBuffer(bf)
+					logFile.Close()
+					for{
+						l, err := fd.ReadString('\n')
+						if err != nil {
+							if err == io.EOF {
+								lf, _ := os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.ModePerm)
+								lf.Truncate(0)
+								lf.Sync()
+								lf.Close()
+								logFile, _ = os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
 							}
-							_logChanQueue<-l
+							break
 						}
+						_logChanQueue<-l
+					}
+
+
+					if isLogServerOk==false{
+
 
 
 					}
@@ -251,8 +227,9 @@ func init()  {
 			case v :=<-_logFileTempChan:
 				//log.Println(v)
 				if Param.FileStorage{
+					//ioutil.WriteFile(logFileName,[]byte(fmt.Sprintln( v)),os.ModeAppend)
 					if logFile!=nil{
-						logFile.WriteString(fmt.Sprintf("%v", v))
+						logFile.WriteString(fmt.Sprintln( v))
 						logFile.Sync()
 					}
 				}
@@ -266,17 +243,12 @@ func init()  {
 
 	//_logServerOk<-true
 }
-type ParamValue struct {
-	ServerUrl string
-	ServerName string
-	LogFileName string
-	Debug bool
-	PrintStack bool
-	FileStorage bool
-}
-func NewLogger(_param *ParamValue){
+var _startChan =make(chan bool)
+
+func StartLogger(_param *ParamValue){
 	if _param!=nil{
 		Param = _param
 	}
-
+	_startChan<-true
+	_startChan<-true
 }
