@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/nbvghost/gweb/therad"
 	"io"
 	"io/ioutil"
 	"log"
@@ -144,20 +145,19 @@ func Error(err error) bool {
 }
 func init()  {
 
-	go func() {
+	therad.NewCoroutine(func() {
 		<-_startChan
 		if strings.EqualFold(Param.ServerAddr,"")==false{
 			glogServer.StartTCP(Param.ServerAddr,_logServerStatus)
 		}
+	}, func(v interface{}, stack []byte) {
+		Debug(v)
+		Debug(string(stack))
 
-
-
-
-	}()
+	})
 
 	//日志服务
-	go func() {
-
+	therad.NewCoroutine(func() {
 		for v := range _logChanQueue {
 
 			if strings.EqualFold(Param.ServerAddr,"")==false{
@@ -167,18 +167,21 @@ func init()  {
 				}
 			}
 		}
+	}, func(v interface{}, stack []byte) {
+		Debug(v)
+		Debug(string(stack))
 
-	}()
+	})
 
 	//日志服务
-	go func() {
+	therad.NewCoroutine(func() {
 		<-_startChan
 		logFileName:=Param.LogFileName+"_glog_"+time.Now().Format("2006_01_02")+".log"
 
 		var logFile *os.File
 		logFile,_= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
 
-		var isLogServerOk =false
+		//var isLogServerOk =false
 		for{
 			select {
 			case v:=<-time.NewTicker(1*time.Hour).C:
@@ -212,17 +215,17 @@ func init()  {
 					}
 
 
-					if isLogServerOk==false{
+					//if isLogServerOk==false{
 
 
 
-					}
-					isLogServerOk=true
+					//}
+					//isLogServerOk=true
 					//logFile.Sync()
 					//logFile.Close()
 					//logFile=nil
 				}else{
-					isLogServerOk=false
+					//isLogServerOk=false
 				}
 			case v :=<-_logFileTempChan:
 				//log.Println(v)
@@ -238,10 +241,12 @@ func init()  {
 			}
 		}
 		//logFile.Sync()
+	}, func(v interface{}, stack []byte) {
+		Debug(v)
+		Debug(string(stack))
 
-	}()
+	})
 
-	//_logServerOk<-true
 }
 var _startChan =make(chan bool)
 
