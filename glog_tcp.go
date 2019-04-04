@@ -6,48 +6,64 @@ import (
 	"errors"
 	"log"
 	"net"
+	"time"
 )
 
-type TCP struct {
+type GlogTCP struct {
 	ServerAddr *net.TCPAddr
 	ServerConn *net.TCPConn
-	reConnectChan chan bool
+	ServerAble bool
 	status chan<- bool
 }
-func (tcp *TCP)StartTCP(address string,status chan<- bool)  {
+func (tcp *GlogTCP)StartTCP(address string,status chan<- bool)  {
 	tcp.status =status
-	tcp.reConnectChan =make(chan bool,10)
+	//tcp.reConnectChan =make(chan bool,10)
 	var err error
 	tcp.ServerAddr,err=net.ResolveTCPAddr("tcp",address)
 	if err!=nil{
 		log.Panicln(err)
 		return
 	}
+	times:=0
+	for{
 
-	for   {
-		select {
-			case <-tcp.reConnectChan:
-				if tcp.ServerConn==nil{
-					tcp.connect()
-				}
+		err:=tcp.connect(&times)
+		if err!=nil{
+			Debug(err)
 		}
+		time.Sleep(time.Duration(times*10)*time.Millisecond)
+
 	}
 
 
-
 }
-func (tcp *TCP)connect()  {
+func (tcp *GlogTCP)connect(times *int) error {
 	var err error
 	tcp.ServerConn,err=net.DialTCP("tcp",nil,tcp.ServerAddr)
 	if err!=nil{
 		Debug(err)
-		return
+		*times++
+		return err
 	}
 	tcp.ServerConn.SetKeepAlive(true)
+	tcp.ServerAble =true
 	tcp.status<-true
 
+	b:=make([]byte,0)
+
+	for{
+		n,err:=tcp.ServerConn.Read(b)
+		if err!=nil{
+			return err
+		}
+		log.Println(n)
+
+	}
+
+
+
 }
-func (tcp *TCP)Write(log string) error  {
+func (tcp *GlogTCP)Write(log string) error  {
 	var bodyLen int32
 
 	bodyBuffer := bytes.NewBuffer([]byte{})
@@ -65,7 +81,7 @@ func (tcp *TCP)Write(log string) error  {
 		if err!=nil{
 			tcp.ServerConn.Close()
 			tcp.ServerConn=nil
-			tcp.reConnectChan<-true
+			//tcp.reConnectChan<-true
 			tcp.status<-false
 			return err
 		}else {
@@ -73,7 +89,7 @@ func (tcp *TCP)Write(log string) error  {
 		}
 
 	}else{
-		tcp.reConnectChan<-true
+		//tcp.reConnectChan<-true
 		tcp.status<-false
 		return errors.New("网络错误，在重连")
 	}

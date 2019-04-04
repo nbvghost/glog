@@ -22,11 +22,11 @@ var _logFileTempChan =make(chan string,1000)
 var _logServerStatus =make(chan bool)
 
 
-var glogServer =&TCP{}
+var glogServer =&GlogTCP{}
 type ParamValue struct {
 	ServerAddr string
 	ServerName string
-	LogFileName string
+	LogFilePath string
 	Debug bool
 	PrintStack bool
 	FileStorage bool
@@ -34,7 +34,7 @@ type ParamValue struct {
 var Param = &ParamValue{
 	ServerAddr:"",
 	ServerName:"default",
-	LogFileName:"glog",
+	LogFilePath:"glog",
 	Debug:true,
 	PrintStack:false,
 	FileStorage:false,
@@ -143,6 +143,19 @@ func Error(err error) bool {
 		return false
 	}
 }
+func getLogFileName(v time.Time) string {
+	logFileName:=""
+	if strings.EqualFold(Param.LogFilePath,""){
+		logFileName=Param.ServerName+"/"+v.Format("2006_01_02")+".log"
+		err:=os.MkdirAll(Param.ServerName,os.ModePerm)
+		Error(err)
+	}else{
+		logFileName=Param.LogFilePath+"/"+Param.ServerName+"/"+v.Format("2006_01_02")+".log"
+		err:=os.MkdirAll(Param.LogFilePath+"/"+Param.ServerName,os.ModePerm)
+		Error(err)
+	}
+	return logFileName
+}
 func init()  {
 
 	therad.NewCoroutine(func() {
@@ -153,7 +166,6 @@ func init()  {
 	}, func(v interface{}, stack []byte) {
 		Debug(v)
 		Debug(string(stack))
-
 	})
 
 	//日志服务
@@ -176,18 +188,26 @@ func init()  {
 	//日志服务
 	therad.NewCoroutine(func() {
 		<-_startChan
-		logFileName:=Param.LogFileName+"_glog_"+time.Now().Format("2006_01_02")+".log"
-
+		logFileName:=getLogFileName(time.Now())
 		var logFile *os.File
-		logFile,_= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
+		logFile,err:= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
+		Error(err)
+
 
 		//var isLogServerOk =false
 		for{
 			select {
-			case v:=<-time.NewTicker(1*time.Hour).C:
-				fmt.Println(v)
-
-				logFile,_= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
+			case v:=<-time.NewTicker(1*time.Second).C:
+				//fmt.Println(v)
+				//_logFileName:=Param.LogFilePath+"_glog_"+v.Format("2006_01_02")+".log"
+				_logFileName:=getLogFileName(v)
+				if strings.EqualFold(logFileName,_logFileName)==false{
+					logFileName=_logFileName
+					if logFile!=nil{
+						logFile.Close()
+					}
+					logFile,_= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
+				}
 
 			case v:=<-_logServerStatus:
 
@@ -213,12 +233,7 @@ func init()  {
 						}
 						_logChanQueue<-l
 					}
-
-
 					//if isLogServerOk==false{
-
-
-
 					//}
 					//isLogServerOk=true
 					//logFile.Sync()
