@@ -41,7 +41,7 @@ func (tcp *GlogTCP)connect(times *int) error {
 	var err error
 	tcp.ServerConn,err=net.DialTCP("tcp",nil,tcp.ServerAddr)
 	if err!=nil{
-		Debug(err)
+		//Debug(err)
 		*times++
 		return err
 	}
