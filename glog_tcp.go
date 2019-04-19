@@ -52,11 +52,11 @@ func (tcp *GlogTCP)connect(times *int) error {
 	b:=make([]byte,0)
 
 	for{
-		n,err:=tcp.ServerConn.Read(b)
+		_,err:=tcp.ServerConn.Read(b)
 		if err!=nil{
 			return err
 		}
-		log.Println(n)
+		time.Sleep(time.Second)
 
 	}
 

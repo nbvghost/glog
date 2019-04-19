@@ -194,10 +194,12 @@ func init()  {
 		Error(err)
 
 
+		ticker:=time.NewTicker(time.Second)
 		//var isLogServerOk =false
+		defer ticker.Stop()
 		for{
 			select {
-			case v:=<-time.NewTicker(1*time.Second).C:
+			case v:=<-ticker.C:
 				//fmt.Println(v)
 				//_logFileName:=Param.LogFilePath+"_glog_"+v.Format("2006_01_02")+".log"
 				_logFileName:=getLogFileName(v)
