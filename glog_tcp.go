@@ -24,30 +24,34 @@ func (tcp *GlogTCP)StartTCP(address string,status chan<- bool)  {
 		log.Panicln(err)
 		return
 	}
-	times:=0
+
 	for{
 
-		err:=tcp.connect(&times)
+		err:=tcp.connect()
 		if err!=nil{
 			Debug(err)
 		}
-		time.Sleep(time.Duration(times*10)*time.Millisecond)
+		time.Sleep(time.Second)
 
 	}
 
 
 }
-func (tcp *GlogTCP)connect(times *int) error {
+func (tcp *GlogTCP)connect() error {
 	var err error
 	tcp.ServerConn,err=net.DialTCP("tcp",nil,tcp.ServerAddr)
 	if err!=nil{
 		//Debug(err)
-		*times++
 		return err
 	}
 	tcp.ServerConn.SetKeepAlive(true)
 	tcp.ServerAble =true
 	tcp.status<-true
+
+	defer func() {
+		tcp.status<-false
+		tcp.ServerAble =false
+	}()
 
 	b:=make([]byte,0)
 
@@ -64,6 +68,12 @@ func (tcp *GlogTCP)connect(times *int) error {
 
 }
 func (tcp *GlogTCP)Write(log string) error  {
+
+	if tcp.ServerAble==false{
+		//tcp.status<-false
+		return errors.New("网络错误，在重连")
+	}
+
 	var bodyLen int32
 
 	bodyBuffer := bytes.NewBuffer([]byte{})
@@ -76,8 +86,10 @@ func (tcp *GlogTCP)Write(log string) error  {
 	binary.Write(packageBuffer, binary.BigEndian, &bodyLen)
 	binary.Write(packageBuffer, binary.BigEndian, body)
 
-	if tcp.ServerConn!=nil{
-		_,err:=tcp.ServerConn.Write(packageBuffer.Bytes())
+	wb:=packageBuffer.Bytes()
+
+	if tcp.ServerConn!=nil && len(wb)>0{
+		_,err:=tcp.ServerConn.Write(wb)
 		if err!=nil{
 			tcp.ServerConn.Close()
 			tcp.ServerConn=nil

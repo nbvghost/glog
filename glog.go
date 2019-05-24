@@ -1,12 +1,9 @@
 package glog
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/nbvghost/gweb/therad"
-	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"runtime"
@@ -57,6 +54,7 @@ func Debug(v ...interface{})  {
 	}
 }
 func Trace(v ...interface{}) {
+
 	//outText:=fmt.Sprintln(v...)
 	_, file, line, ok := runtime.Caller(1)
 	if !ok{
@@ -66,8 +64,7 @@ func Trace(v ...interface{}) {
 	if Param.Debug{
 		 _glogOut.Output(2, fmt.Sprintln(v...))
 	}
-
-	for index:=range v{
+	/*for index:=range v{
 		b,_:=json.Marshal(map[string]interface{}{
 			"Time":time.Now().Format("2006-01-02 15:04:05"),
 			"File":file,
@@ -76,8 +73,20 @@ func Trace(v ...interface{}) {
 			"ServerName":Param.ServerName,
 		})
 		_logChanQueue<-string(b)
-	}
+	}*/
 
+	filePaths:=strings.Split(file,"/")
+	if len(filePaths)==0{
+		filePaths=[]string{file}
+	}
+	b,_:=json.Marshal(map[string]interface{}{
+		"Time":time.Now().Format("2006-01-02 15:04:05"),
+		"File":filePaths[len(filePaths)-1],
+		"Line":line,
+		"TRACE":v,
+		"ServerName":Param.ServerName,
+	})
+	_logChanQueue<-string(b)
 
 
 	/*go func(_file string, _line int,_v []interface{}) {
@@ -115,14 +124,13 @@ func Error(err error) bool {
 			"Time":time.Now().Format("2006-01-02 15:04:05"),
 			"File":file,
 			"Line":line,
-			"ERROR":err,
+			"ERROR":err.Error(),
 			"ServerName":Param.ServerName,
 		})
 		//conf.LogQueue=append(conf.LogQueue,string(b))
 		_logChanQueue<-string(b)
 
-
-		/*go func(_file string, _line int,_err error) {
+		/*go func(_file string, _line int,_err error) max_relay_log_size{
 			//util.Trace(funcName,file,line,ok)
 				//log.Println(file, line, err)
 				b,_:=json.Marshal(map[string]interface{}{
@@ -171,13 +179,22 @@ func init()  {
 	//日志服务
 	therad.NewCoroutine(func() {
 		for v := range _logChanQueue {
-
-			if strings.EqualFold(Param.ServerAddr,"")==false{
-				err:=glogServer.Write(v)
-				if err!=nil{
-					_logFileTempChan<-v
+			therad.NewCoroutineParams(func(args []interface{}) {
+				_v:=args[0].(string)
+				if strings.EqualFold(Param.ServerAddr,"")==false && strings.EqualFold(_v,"")==false{
+					err:=glogServer.Write(_v)
+					if err!=nil{
+						_logFileTempChan<-_v
+					}
+				}else if Param.FileStorage{
+					_logFileTempChan<-_v
 				}
-			}
+
+			}, func(v interface{}, stack []byte) {
+				Debug(v)
+				Trace(string(stack))
+			},v)
+
 		}
 	}, func(v interface{}, stack []byte) {
 		Debug(v)
@@ -190,7 +207,7 @@ func init()  {
 		<-_startChan
 		logFileName:=getLogFileName(time.Now())
 		var logFile *os.File
-		logFile,err:= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
+		logFile,err:= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_SYNC, os.ModePerm)
 		Error(err)
 
 
@@ -208,14 +225,14 @@ func init()  {
 					if logFile!=nil{
 						logFile.Close()
 					}
-					logFile,_= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
+					logFile,_= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_SYNC, os.ModePerm)
 				}
 
 			case v:=<-_logServerStatus:
 
 				if v{
 
-					bf,err:=ioutil.ReadAll(logFile)
+					/*bf,err:=ioutil.ReadAll(logFile)
 					if err!=nil{
 						return
 					}
@@ -225,16 +242,16 @@ func init()  {
 						l, err := fd.ReadString('\n')
 						if err != nil {
 							if err == io.EOF {
-								lf, _ := os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.ModePerm)
+								lf, _ := os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_SYNC, os.ModePerm)
 								lf.Truncate(0)
 								lf.Sync()
 								lf.Close()
-								logFile, _ = os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
+								logFile, _ = os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_SYNC, os.ModePerm)
 							}
 							break
 						}
 						_logChanQueue<-l
-					}
+					}*/
 					//if isLogServerOk==false{
 					//}
 					//isLogServerOk=true
@@ -250,7 +267,7 @@ func init()  {
 					//ioutil.WriteFile(logFileName,[]byte(fmt.Sprintln( v)),os.ModeAppend)
 					if logFile!=nil{
 						logFile.WriteString(fmt.Sprintln( v))
-						logFile.Sync()
+						//logFile.Sync()
 					}
 				}
 
