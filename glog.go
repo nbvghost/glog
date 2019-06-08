@@ -3,7 +3,8 @@ package glog
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/nbvghost/gweb/therad"
+	"github.com/nbvghost/gweb/thread"
+
 	"log"
 	"os"
 	"runtime"
@@ -14,7 +15,7 @@ import (
 
 //queue
 //日志列对
-var _logChanQueue =make(chan string,100000)
+var _logChanQueue =make(chan string,1000)
 var _logFileTempChan =make(chan string,1000)
 var _logServerStatus =make(chan bool)
 
@@ -89,21 +90,6 @@ func Trace(v ...interface{}) {
 	_logChanQueue<-string(b)
 
 
-	/*go func(_file string, _line int,_v []interface{}) {
-
-
-		b,_:=json.Marshal(map[string]interface{}{
-			"Time":time.Now().Format("2006-01-02 15:04:05"),
-			"File":_file,
-			"Line":_line,
-			"TRACE":_v,
-			"ServerName":Param.ServerName,
-		})
-		_logChanQueue<-string(b)
-
-
-	}(file,line,v)*/
-
 }
 
 func Error(err error) bool {
@@ -156,59 +142,57 @@ func getLogFileName(v time.Time) string {
 	if strings.EqualFold(Param.LogFilePath,""){
 		logFileName=Param.ServerName+"/"+v.Format("2006_01_02")+".log"
 		err:=os.MkdirAll(Param.ServerName,os.ModePerm)
-		Error(err)
+		if err!=nil{
+			log.Println(err)
+		}
 	}else{
 		logFileName=Param.LogFilePath+"/"+Param.ServerName+"/"+v.Format("2006_01_02")+".log"
 		err:=os.MkdirAll(Param.LogFilePath+"/"+Param.ServerName,os.ModePerm)
-		Error(err)
+		if err!=nil{
+			log.Println(err)
+		}
 	}
 	return logFileName
 }
 func init()  {
 
-	therad.NewCoroutine(func() {
+	thread.NewCoroutine(func() {
 		<-_startChan
 		if strings.EqualFold(Param.ServerAddr,"")==false{
 			glogServer.StartTCP(Param.ServerAddr,_logServerStatus)
 		}
 	}, func(v interface{}, stack []byte) {
-		Debug(v)
-		Debug(string(stack))
+		log.Println(v)
+		log.Println(string(stack))
 	})
 
 	//日志服务
-	therad.NewCoroutine(func() {
+	thread.NewCoroutine(func() {
 		for v := range _logChanQueue {
-			therad.NewCoroutineParams(func(args []interface{}) {
-				_v:=args[0].(string)
-				if strings.EqualFold(Param.ServerAddr,"")==false && strings.EqualFold(_v,"")==false{
-					err:=glogServer.Write(_v)
-					if err!=nil{
-						_logFileTempChan<-_v
-					}
-				}else if Param.FileStorage{
-					_logFileTempChan<-_v
+			if strings.EqualFold(Param.ServerAddr,"")==false && strings.EqualFold(v,"")==false{
+				err:=glogServer.Write(v)
+				if err!=nil{
+					_logFileTempChan<-v
 				}
-
-			}, func(v interface{}, stack []byte) {
-				Debug(v)
-				Trace(string(stack))
-			},v)
-
+			}else if Param.FileStorage{
+				_logFileTempChan<-v
+			}
 		}
 	}, func(v interface{}, stack []byte) {
-		Debug(v)
-		Debug(string(stack))
+		log.Println(v)
+		log.Println(string(stack))
 
 	})
 
 	//日志服务
-	therad.NewCoroutine(func() {
+	thread.NewCoroutine(func() {
 		<-_startChan
 		logFileName:=getLogFileName(time.Now())
 		var logFile *os.File
 		logFile,err:= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_SYNC, os.ModePerm)
-		Error(err)
+		if err!=nil{
+			log.Println(err)
+		}
 
 
 		ticker:=time.NewTicker(time.Second)
@@ -276,8 +260,8 @@ func init()  {
 		}
 		//logFile.Sync()
 	}, func(v interface{}, stack []byte) {
-		Debug(v)
-		Debug(string(stack))
+		log.Println(v)
+		log.Println(string(stack))
 
 	})
 

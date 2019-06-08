@@ -29,7 +29,7 @@ func (tcp *GlogTCP)StartTCP(address string,status chan<- bool)  {
 
 		err:=tcp.connect()
 		if err!=nil{
-			Debug(err)
+			log.Println(err)
 		}
 		time.Sleep(time.Second)
 
