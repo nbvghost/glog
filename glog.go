@@ -1,6 +1,7 @@
 package glog
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"github.com/nbvghost/gweb/thread"
@@ -157,10 +158,12 @@ func getLogFileName(v time.Time) string {
 func init()  {
 
 	thread.NewCoroutine(func() {
+
 		<-_startChan
 		if strings.EqualFold(Param.ServerAddr,"")==false{
 			glogServer.StartTCP(Param.ServerAddr,_logServerStatus)
 		}
+
 	}, func(v interface{}, stack []byte) {
 		log.Println(v)
 		log.Println(string(stack))
@@ -188,12 +191,15 @@ func init()  {
 	thread.NewCoroutine(func() {
 		<-_startChan
 		logFileName:=getLogFileName(time.Now())
-		var logFile *os.File
-		logFile,err:= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_SYNC, os.ModePerm)
+		var _logFile *os.File
+		var logFileWriter *bufio.Writer
+		var err error
+		_logFile,err= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_SYNC, os.ModePerm)
 		if err!=nil{
 			log.Println(err)
+		}else{
+			logFileWriter = bufio.NewWriter(_logFile)
 		}
-
 
 		ticker:=time.NewTicker(time.Second)
 		//var isLogServerOk =false
@@ -206,10 +212,18 @@ func init()  {
 				_logFileName:=getLogFileName(v)
 				if strings.EqualFold(logFileName,_logFileName)==false{
 					logFileName=_logFileName
-					if logFile!=nil{
-						logFile.Close()
+					if _logFile!=nil{
+						_logFile.Close()
 					}
-					logFile,_= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_SYNC, os.ModePerm)
+					if logFileWriter!=nil{
+						logFileWriter.Flush()
+					}
+					_logFile,err= os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_SYNC, os.ModePerm)
+					if err!=nil{
+						log.Println(err)
+					}else{
+						logFileWriter = bufio.NewWriter(_logFile)
+					}
 				}
 
 			case v:=<-_logServerStatus:
@@ -245,12 +259,19 @@ func init()  {
 				}else{
 					//isLogServerOk=false
 				}
+			case <-thread.ListenSignal():
+				if logFileWriter!=nil{
+					//logFileWriter.WriteString(fmt.Sprintln(v))
+					logFileWriter.Flush()
+					log.Println("Glog is flush over")
+					//logFile.Sync()
+				}
 			case v :=<-_logFileTempChan:
 				//log.Println(v)
 				if Param.FileStorage{
 					//ioutil.WriteFile(logFileName,[]byte(fmt.Sprintln( v)),os.ModeAppend)
-					if logFile!=nil{
-						logFile.WriteString(fmt.Sprintln( v))
+					if logFileWriter!=nil{
+						logFileWriter.WriteString(fmt.Sprintln(v))
 						//logFile.Sync()
 					}
 				}
