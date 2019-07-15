@@ -203,6 +203,7 @@ func init()  {
 
 		ticker:=time.NewTicker(time.Second)
 		//var isLogServerOk =false
+		sn:=thread.ListeningSignal()
 		defer ticker.Stop()
 		for{
 			select {
@@ -223,6 +224,7 @@ func init()  {
 						log.Println(err)
 					}else{
 						logFileWriter = bufio.NewWriter(_logFile)
+
 					}
 				}
 
@@ -259,19 +261,23 @@ func init()  {
 				}else{
 					//isLogServerOk=false
 				}
-			case <-thread.ListenSignal():
+			case <-sn:
 				if logFileWriter!=nil{
 					//logFileWriter.WriteString(fmt.Sprintln(v))
 					logFileWriter.Flush()
-					log.Println("Glog is flush over")
+					_glogOut.Println("Glog is flush over")
 					//logFile.Sync()
+					os.Exit(0)
 				}
 			case v :=<-_logFileTempChan:
 				//log.Println(v)
 				if Param.FileStorage{
 					//ioutil.WriteFile(logFileName,[]byte(fmt.Sprintln( v)),os.ModeAppend)
 					if logFileWriter!=nil{
-						logFileWriter.WriteString(fmt.Sprintln(v))
+						n,err:=logFileWriter.WriteString(fmt.Sprintln(v))
+						if err!=nil{
+							_glogErr.Println(n,err)
+						}
 						//logFile.Sync()
 					}
 				}
