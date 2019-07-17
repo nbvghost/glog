@@ -267,7 +267,7 @@ func init()  {
 					logFileWriter.Flush()
 					_glogOut.Println("Glog is flush over")
 					//logFile.Sync()
-					os.Exit(0)
+					//os.Exit(0)
 				}
 			case v :=<-_logFileTempChan:
 				//log.Println(v)
