@@ -14,6 +14,14 @@ type GlogTCP struct {
 	ServerConn *net.TCPConn
 	ServerAble bool
 	status chan<- bool
+	isClose bool
+}
+func (tcp *GlogTCP)Close()  {
+	tcp.isClose =true
+	if tcp.ServerAddr!=nil{
+		tcp.ServerConn.Close()
+	}
+
 }
 func (tcp *GlogTCP)StartTCP(address string,status chan<- bool)  {
 	tcp.status =status
@@ -26,12 +34,15 @@ func (tcp *GlogTCP)StartTCP(address string,status chan<- bool)  {
 	}
 
 	for{
-
-		err:=tcp.connect()
-		if err!=nil{
-			log.Println(err)
+		if tcp.isClose==false{
+			err:=tcp.connect()
+			if err!=nil{
+				log.Println(err)
+			}
+			time.Sleep(time.Second)
+		}else{
+			break
 		}
-		time.Sleep(time.Second)
 
 	}
 

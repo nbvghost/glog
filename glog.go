@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/nbvghost/gweb/thread"
-
 	"log"
 	"os"
 	"runtime"
@@ -19,6 +18,7 @@ import (
 var _logChanQueue =make(chan string,1000)
 var _logFileTempChan =make(chan string,1000)
 var _logServerStatus =make(chan bool)
+//var _closeApp =make(chan bool)
 
 
 var glogServer =&GlogTCP{}
@@ -203,7 +203,7 @@ func init()  {
 
 		ticker:=time.NewTicker(time.Second)
 		//var isLogServerOk =false
-		sn:=thread.ListeningSignal()
+		//sn:=thread.ListeningSignal()
 		defer ticker.Stop()
 		for{
 			select {
@@ -226,6 +226,10 @@ func init()  {
 						logFileWriter = bufio.NewWriter(_logFile)
 
 					}
+				}
+
+				if logFileWriter!=nil{
+					logFileWriter.Flush()
 				}
 
 			case v:=<-_logServerStatus:
@@ -260,14 +264,6 @@ func init()  {
 					//logFile=nil
 				}else{
 					//isLogServerOk=false
-				}
-			case <-sn:
-				if logFileWriter!=nil{
-					//logFileWriter.WriteString(fmt.Sprintln(v))
-					logFileWriter.Flush()
-					_glogOut.Println("Glog is flush over")
-					//logFile.Sync()
-					//os.Exit(0)
 				}
 			case v :=<-_logFileTempChan:
 				//log.Println(v)
