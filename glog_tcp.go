@@ -36,10 +36,7 @@ func (tcp *GlogTCP) StartTCP(address string, status chan<- bool) {
 
 	for {
 		if tcp.isClose == false {
-			err := tcp.connect()
-			if err != nil {
-				log.Println(err)
-			}
+			tcp.connect()
 			time.Sleep(time.Second)
 		} else {
 			break

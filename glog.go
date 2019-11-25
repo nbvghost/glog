@@ -2,7 +2,6 @@ package glog
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -54,6 +53,43 @@ func Debug(v ...interface{}) {
 		_glogDebug.Output(2, fmt.Sprintln(v...))
 	}
 }
+func Print(v ...interface{}) {
+
+	//outText:=fmt.Sprintln(v...)
+	_, file, line, ok := runtime.Caller(1)
+	if !ok {
+		file = "unknown"
+		line = 0
+	}
+	if Param.Debug {
+		_glogOut.Output(2, fmt.Sprintln(v...))
+	}
+	/*for index:=range v{
+		b,_:=json.Marshal(map[string]interface{}{
+			"Time":time.Now().Format("2006-01-02 15:04:05"),
+			"File":file,
+			"Line":line,
+			"TRACE":v[index],
+			"ServerName":Param.ServerName,
+		})
+		_logChanQueue<-string(b)
+	}*/
+
+	filePaths := strings.Split(file, "/")
+	if len(filePaths) == 0 {
+		filePaths = []string{file}
+	}
+
+	outs:=make([]interface{},0)
+	outs=append(outs,filePaths[len(filePaths)-1])
+	outs=append(outs,line)
+	outs=append(outs, time.Now().Format("2006-01-02 15:04:05"))
+	outs=append(outs, Param.ServerName)
+	outs=append(outs, v...)
+
+	_logChanQueue <- fmt.Sprintln(outs...)
+
+}
 func Trace(v ...interface{}) {
 
 	//outText:=fmt.Sprintln(v...)
@@ -80,6 +116,18 @@ func Trace(v ...interface{}) {
 	if len(filePaths) == 0 {
 		filePaths = []string{file}
 	}
+
+	outs:=make([]interface{},0)
+	outs=append(outs,filePaths[len(filePaths)-1])
+	outs=append(outs,line)
+	outs=append(outs, time.Now().Format("2006-01-02 15:04:05"))
+	outs=append(outs, Param.ServerName)
+	outs=append(outs, "TRACE")
+	outs=append(outs, v...)
+
+	_logChanQueue <- fmt.Sprintln(outs...)
+
+	/*
 	b, _ := json.Marshal(map[string]interface{}{
 		"Time":       time.Now().Format("2006-01-02 15:04:05"),
 		"File":       filePaths[len(filePaths)-1],
@@ -87,7 +135,7 @@ func Trace(v ...interface{}) {
 		"TRACE":      v,
 		"ServerName": Param.ServerName,
 	})
-	_logChanQueue <- string(b)
+	_logChanQueue <- string(b)*/
 
 }
 
@@ -104,16 +152,28 @@ func Error(err error) bool {
 				debug.PrintStack()
 			}
 		}
+
+
+		outs:=make([]interface{},0)
+		outs=append(outs,file)
+		outs=append(outs,line)
+		outs=append(outs, time.Now().Format("2006-01-02 15:04:05"))
+		outs=append(outs, Param.ServerName)
+		outs=append(outs, "ERROR")
+		outs=append(outs, err.Error())
+
+		_logChanQueue <- fmt.Sprintln(outs...)
+
 		//log.Println(file, line, err)
-		b, _ := json.Marshal(map[string]interface{}{
+		/*b, _ := json.Marshal(map[string]interface{}{
 			"Time":       time.Now().Format("2006-01-02 15:04:05"),
 			"File":       file,
 			"Line":       line,
 			"ERROR":      err.Error(),
 			"ServerName": Param.ServerName,
-		})
+		})*/
 		//conf.LogQueue=append(conf.LogQueue,string(b))
-		_logChanQueue <- string(b)
+		//_logChanQueue <- string(b)
 
 		/*go func(_file string, _line int,_err error) max_relay_log_size{
 			//util.Trace(funcName,file,line,ok)
@@ -259,7 +319,7 @@ func init() {
 				if Param.FileStorage {
 					//ioutil.WriteFile(logFileName,[]byte(fmt.Sprintln( v)),os.ModeAppend)
 					if logFileWriter != nil {
-						n, err := logFileWriter.WriteString(fmt.Sprintln(v))
+						n, err := logFileWriter.WriteString(v)
 						if err != nil {
 							_glogErr.Println(n, err)
 						}
