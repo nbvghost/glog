@@ -39,9 +39,9 @@ var Param = &ParamValue{
 	FileStorage: false,
 }
 
-var _glogOut = log.New(os.Stdout, "[TRACE] ", log.LstdFlags|log.LUTC|log.Lshortfile)
-var _glogErr = log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.LUTC|log.Lshortfile)
-var _glogDebug = log.New(os.Stdout, "[DEBUG] ", log.LstdFlags|log.LUTC|log.Lshortfile)
+var _glogOut = log.New(os.Stdout, "[TRACE] ", log.LstdFlags|log.Lshortfile)
+var _glogErr = log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.Lshortfile)
+var _glogDebug = log.New(os.Stdout, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
 
 func Debugf(format string, v ...interface{}) {
 	if Param.Debug {
