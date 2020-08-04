@@ -53,6 +53,11 @@ func Debug(v ...interface{}) {
         _glogDebug.Output(2, fmt.Sprintln(v...))
     }
 }
+func Panic(err error) {
+    if Error(err) {
+        panic(err)
+    }
+}
 func Print(v ...interface{}) {
 
     //outText:=fmt.Sprintln(v...)
