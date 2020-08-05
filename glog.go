@@ -133,7 +133,7 @@ func format(pc uintptr, file string, line int, level string, values []interface{
 		outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
 		outs = append(outs, Param.Name)
 
-		b, _ := json.Marshal(outs)
+		b, _ := json.Marshal(logs)
 
 		outs = append(outs, string(b))
 
