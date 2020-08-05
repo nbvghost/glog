@@ -2,14 +2,21 @@ package glog
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 )
+
+type FormatType string
+
+const CLF FormatType = "CLF"
+const JSON FormatType = "JSON"
 
 //queue
 //日志列对
@@ -22,20 +29,20 @@ var _logServerStatus = make(chan bool)
 var glogServer = &GlogTCP{}
 
 type ParamValue struct {
-	ServerAddr  string
-	ServerName  string
+	PushAddr    string
+	Name        string
+	FormatType  FormatType
 	LogFilePath string
 	StandardOut bool
-	PrintStack  bool
 	FileStorage bool
 }
 
 var Param = &ParamValue{
-	ServerAddr:  "",
-	ServerName:  "default",
+	PushAddr:    "",
+	Name:        "default",
 	LogFilePath: "glog",
 	StandardOut: true,
-	PrintStack:  false,
+	FormatType:  CLF,
 	FileStorage: false,
 }
 
@@ -43,177 +50,109 @@ var _glogOut = log.New(os.Stdout, "[TRACE] ", log.LstdFlags|log.Lshortfile)
 var _glogErr = log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.Lshortfile)
 var _glogDebug = log.New(os.Stdout, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
 
-func Debugf(format string, v ...interface{}) {
-	if Param.StandardOut {
-		_glogDebug.Output(2, fmt.Sprintf(format, v...))
-	}
-}
 func Debug(v ...interface{}) {
 	if Param.StandardOut {
 		_glogDebug.Output(2, fmt.Sprintln(v...))
 	}
 }
+func getSource(pc uintptr, file string, line int, ok bool) (uintptr, string, int) {
 
+	return pc, file, line
+}
 func Panic(err error) {
-	if Error(err) {
+	pc, file, line := getSource(runtime.Caller(1))
+	if err != nil {
+		format(pc, file, line, "PANIC", []interface{}{err.Error()})
 		panic(err)
 	}
 }
-
-func Print(v ...interface{}) {
-
-	//outText:=fmt.Sprintln(v...)
-	_, file, line, ok := runtime.Caller(1)
-	if !ok {
-		file = "unknown"
-		line = 0
-	}
-	if Param.StandardOut {
-		_glogOut.Output(2, fmt.Sprintln(v...))
-	}
-	/*for index:=range v{
-		b,_:=json.Marshal(map[string]interface{}{
-			"Time":time.Now().Format("2006-01-02 15:04:05"),
-			"File":file,
-			"Line":line,
-			"TRACE":v[index],
-			"ServerName":Param.ServerName,
-		})
-		_logChanQueue<-string(b)
-	}*/
-
-	filePaths := strings.Split(file, "/")
-	if len(filePaths) == 0 {
-		filePaths = []string{file}
-	}
-
-	outs := make([]interface{}, 0)
-	outs = append(outs, filePaths[len(filePaths)-1])
-	outs = append(outs, line)
-	outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
-	outs = append(outs, Param.ServerName)
-	outs = append(outs, v...)
-
-	_logChanQueue <- fmt.Sprintln(outs...)
-
-}
 func Trace(v ...interface{}) {
+	pc, file, line := getSource(runtime.Caller(1))
 
-	//outText:=fmt.Sprintln(v...)
-	_, file, line, ok := runtime.Caller(1)
-	if !ok {
-		file = "unknown"
-		line = 0
-	}
 	if Param.StandardOut {
 		_glogOut.Output(2, fmt.Sprintln(v...))
 	}
-	/*for index:=range v{
-		b,_:=json.Marshal(map[string]interface{}{
-			"Time":time.Now().Format("2006-01-02 15:04:05"),
-			"File":file,
-			"Line":line,
-			"TRACE":v[index],
-			"ServerName":Param.ServerName,
-		})
-		_logChanQueue<-string(b)
-	}*/
 
-	filePaths := strings.Split(file, "/")
-	if len(filePaths) == 0 {
-		filePaths = []string{file}
-	}
-
-	outs := make([]interface{}, 0)
-	outs = append(outs, filePaths[len(filePaths)-1])
-	outs = append(outs, line)
-	outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
-	outs = append(outs, Param.ServerName)
-	outs = append(outs, "TRACE")
-	outs = append(outs, v...)
-
-	_logChanQueue <- fmt.Sprintln(outs...)
-
-	/*
-		b, _ := json.Marshal(map[string]interface{}{
-			"Time":       time.Now().Format("2006-01-02 15:04:05"),
-			"File":       filePaths[len(filePaths)-1],
-			"Line":       line,
-			"TRACE":      v,
-			"ServerName": Param.ServerName,
-		})
-		_logChanQueue <- string(b)*/
+	format(pc, file, line, "TRACE", v)
 
 }
 
 func Error(err error) bool {
 	if err != nil {
-		_, file, line, ok := runtime.Caller(1)
-		if !ok {
-			file = "unknown"
-			line = 0
-		}
+		pc, file, line := getSource(runtime.Caller(1))
+
 		if Param.StandardOut {
-			_glogErr.Output(2, fmt.Sprintln(err))
+			_glogErr.Output(2, fmt.Sprintln(err)+string(debug.Stack()))
 
 		}
-		if Param.PrintStack {
-			debug.PrintStack()
-		}
 
-		outs := make([]interface{}, 0)
-		outs = append(outs, file)
-		outs = append(outs, line)
-		outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
-		outs = append(outs, Param.ServerName)
-		outs = append(outs, "ERROR")
-		outs = append(outs, err.Error())
-
-		_logChanQueue <- fmt.Sprintln(outs...)
-
-		//log.Println(file, line, err)
-		/*b, _ := json.Marshal(map[string]interface{}{
-			"Time":       time.Now().Format("2006-01-02 15:04:05"),
-			"File":       file,
-			"Line":       line,
-			"ERROR":      err.Error(),
-			"ServerName": Param.ServerName,
-		})*/
-		//conf.LogQueue=append(conf.LogQueue,string(b))
-		//_logChanQueue <- string(b)
-
-		/*go func(_file string, _line int,_err error) max_relay_log_size{
-			//util.Trace(funcName,file,line,ok)
-				//log.Println(file, line, err)
-				b,_:=json.Marshal(map[string]interface{}{
-					"Time":time.Now().Format("2006-01-02 15:04:05"),
-					"File":_file,
-					"Line":_line,
-					"ERROR":_err,
-					"ServerName":Param.ServerName,
-				})
-				//conf.LogQueue=append(conf.LogQueue,string(b))
-				_logChanQueue<-string(b)
-
-
-		}(file,line,err)*/
+		format(pc, file, line, "ERROR", []interface{}{err.Error()})
 
 		return true
 	} else {
 		return false
 	}
 }
+
+func format(pc uintptr, file string, line int, level string, values []interface{}) {
+
+	filePath := ""
+
+	filePaths := strings.Split(file, "/")
+	if len(filePaths) <= 2 {
+		filePath = file
+	} else {
+		filePath = filePaths[len(filePaths)-2] + "/" + filePaths[len(filePaths)-1]
+	}
+
+	logs := make(map[int]interface{})
+	for i := 0; i < len(values); i++ {
+		logs[i] = values[i]
+	}
+
+	if Param.FormatType == JSON {
+
+		outs := make(map[string]interface{}, 0)
+		outs["File"] = filePath + ":" + strconv.Itoa(line)
+		outs["Time"] = time.Now().Format("2006-01-02 15:04:05")
+		outs["Name"] = Param.Name
+		outs["Level"] = level
+		outs["PC"] = fmt.Sprintf("%x", pc)
+
+		outs["Logs"] = logs
+
+		b, _ := json.Marshal(outs)
+
+		_logChanQueue <- fmt.Sprintln(string(b))
+
+	} else {
+		outs := make([]interface{}, 0)
+		outs = append(outs, filePath+":"+strconv.Itoa(line))
+		outs = append(outs, line)
+		outs = append(outs, "pc:"+strconv.Itoa(int(pc)))
+		outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
+		outs = append(outs, Param.Name)
+
+		b, _ := json.Marshal(outs)
+
+		outs = append(outs, string(b))
+
+		_logChanQueue <- fmt.Sprintln(outs...)
+	}
+
+}
+
 func getLogFileName(v time.Time) string {
 	logFileName := ""
 	if strings.EqualFold(Param.LogFilePath, "") {
-		logFileName = Param.ServerName + "/" + v.Format("2006_01_02") + ".log"
-		err := os.MkdirAll(Param.ServerName, os.ModePerm)
+		logFileName = Param.Name + "/" + v.Format("2006_01_02") + ".log"
+		err := os.MkdirAll(Param.Name, os.ModePerm)
 		if err != nil {
 			log.Println(err)
 		}
 	} else {
-		logFileName = Param.LogFilePath + "/" + Param.ServerName + "/" + v.Format("2006_01_02") + ".log"
-		err := os.MkdirAll(Param.LogFilePath+"/"+Param.ServerName, os.ModePerm)
+		logFileName = Param.LogFilePath + "/" + Param.Name + "/" + v.Format("2006_01_02") + ".log"
+		err := os.MkdirAll(Param.LogFilePath+"/"+Param.Name, os.ModePerm)
 		if err != nil {
 			log.Println(err)
 		}
@@ -225,15 +164,15 @@ func init() {
 
 	go func() {
 
-		if strings.EqualFold(Param.ServerAddr, "") == false {
-			glogServer.StartTCP(Param.ServerAddr, _logServerStatus)
+		if strings.EqualFold(Param.PushAddr, "") == false {
+			glogServer.StartTCP(Param.PushAddr, _logServerStatus)
 		}
 
 	}()
 	//日志服务
 	go func() {
 		for v := range _logChanQueue {
-			if strings.EqualFold(Param.ServerAddr, "") == false && strings.EqualFold(v, "") == false {
+			if strings.EqualFold(Param.PushAddr, "") == false && strings.EqualFold(v, "") == false {
 				err := glogServer.Write(v)
 				if err != nil && Param.FileStorage {
 					_logFileTempChan <- v
