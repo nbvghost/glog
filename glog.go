@@ -42,7 +42,7 @@ var Param = &paramValue{
 	PushAddr:    "",
 	Name:        "default",
 	LogFilePath: "glog",
-	StandardOut: true,
+	StandardOut: false,
 	FormatType:  CLF,
 	FileStorage: false,
 }
@@ -106,11 +106,6 @@ func format(pc uintptr, file string, line int, level string, values []interface{
 		filePath = filePaths[len(filePaths)-2] + "/" + filePaths[len(filePaths)-1]
 	}
 
-	logs := make(map[int]interface{})
-	for i := 0; i < len(values); i++ {
-		logs[i] = values[i]
-	}
-
 	if Param.FormatType == JSON {
 
 		outs := make(map[string]interface{}, 0)
@@ -119,6 +114,11 @@ func format(pc uintptr, file string, line int, level string, values []interface{
 		outs["Name"] = Param.Name
 		outs["Level"] = level
 		outs["PC"] = fmt.Sprintf("%x", pc)
+
+		logs := make(map[int]interface{})
+		for i := 0; i < len(values); i++ {
+			logs[i] = values[i]
+		}
 
 		outs["Logs"] = logs
 
@@ -133,10 +133,7 @@ func format(pc uintptr, file string, line int, level string, values []interface{
 		outs = append(outs, "pc:"+strconv.Itoa(int(pc)))
 		outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
 		outs = append(outs, Param.Name)
-
-		b, _ := json.Marshal(logs)
-
-		outs = append(outs, string(b))
+		outs = append(outs, values...)
 
 		_logChanQueue <- fmt.Sprintln(outs...)
 	}
