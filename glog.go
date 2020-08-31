@@ -40,38 +40,40 @@ type paramValue struct {
 }
 
 type logger struct {
-	param *paramValue
+	param     *paramValue
+	skip      int
+	calldepth int
 }
 
 func (log *logger) Debug(v ...interface{}) {
 	if log.param.StandardOut {
-		_glogDebug.Output(2, fmt.Sprintln(v...))
+		_glogDebug.Output(log.calldepth, fmt.Sprintln(v...))
 	}
 }
 func (log *logger) Panic(err error) {
-	pc, file, line := getSource(runtime.Caller(1))
+	pc, file, line := log.getSource()
 	if err != nil {
 		out := log.format(pc, file, line, "PANIC", []interface{}{err.Error()})
 		if log.param.StandardOut {
-			_glogDebug.Output(2, out)
+			_glogDebug.Output(log.calldepth, out)
 		}
 		panic(err)
 	}
 }
 func (log *logger) Trace(v ...interface{}) {
-	pc, file, line := getSource(runtime.Caller(1))
+	pc, file, line := log.getSource()
 
 	out := log.format(pc, file, line, "TRACE", v)
 
 	if log.param.StandardOut {
-		_glogOut.Output(2, out)
+		_glogOut.Output(log.calldepth, out)
 	}
 
 }
 
 func (log *logger) Error(err error) bool {
 	if err != nil {
-		pc, file, line := getSource(runtime.Caller(1))
+		pc, file, line := log.getSource()
 
 		out := log.format(pc, file, line, "ERROR", []interface{}{map[string]interface{}{
 			"Error": err.Error(),
@@ -79,7 +81,7 @@ func (log *logger) Error(err error) bool {
 		}})
 
 		if log.param.StandardOut {
-			_glogErr.Output(2, out)
+			_glogErr.Output(log.calldepth, out)
 
 		}
 
@@ -88,17 +90,21 @@ func (log *logger) Error(err error) bool {
 		return false
 	}
 }
-
+func (log *logger) getSource() (uintptr, string, int) {
+	pc, file, line, _ := runtime.Caller(log.skip)
+	return pc, file, line
+}
+func (log *logger) getSourceByZero() (uintptr, string, int) {
+	pc, file, line, _ := runtime.Caller(0)
+	return pc, file, line
+}
 func (log *logger) format(pc uintptr, file string, line int, level string, values []interface{}) string {
 
-	filePath := ""
+	filePath := getLastTowPath(file)
 
-	filePaths := strings.Split(file, "/")
-	if len(filePaths) <= 2 {
-		filePath = file
-	} else {
-		filePath = filePaths[len(filePaths)-2] + "/" + filePaths[len(filePaths)-1]
-	}
+	_, glogFilePath, _ := log.getSourceByZero()
+
+	version := strings.Split(getLastTowPath(glogFilePath), "/")[0]
 
 	if log.param.FormatType == JSON {
 
@@ -108,6 +114,7 @@ func (log *logger) format(pc uintptr, file string, line int, level string, value
 		outs["AppName"] = log.param.AppName
 		outs["Tag"] = log.param.Tag
 		outs["Level"] = level
+		outs["Version"] = version
 		outs["PC"] = fmt.Sprintf("%x", pc)
 
 		if len(values) == 1 {
@@ -131,8 +138,10 @@ func (log *logger) format(pc uintptr, file string, line int, level string, value
 		outs = append(outs, filePath+":"+strconv.Itoa(line))
 		outs = append(outs, "PC:"+strconv.Itoa(int(pc)))
 		outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
+		outs = append(outs, log.param.AppName)
 		outs = append(outs, log.param.Tag)
 		outs = append(outs, log.param.AppName)
+		outs = append(outs, version)
 		outs = append(outs, values...)
 
 		_logChanQueue <- fmt.Sprintln(outs...)
@@ -141,7 +150,17 @@ func (log *logger) format(pc uintptr, file string, line int, level string, value
 	}
 
 }
+func getLastTowPath(file string) string {
+	filePath := ""
 
+	filePaths := strings.Split(file, "/")
+	if len(filePaths) <= 2 {
+		filePath = file
+	} else {
+		filePath = filePaths[len(filePaths)-2] + "/" + filePaths[len(filePaths)-1]
+	}
+	return filePath
+}
 func NewLogger(Tag string) *logger {
 	cp := func() paramValue {
 
@@ -149,10 +168,10 @@ func NewLogger(Tag string) *logger {
 
 	}()
 	cp.Tag = Tag
-	return &logger{param: &cp}
+	return &logger{param: &cp, skip: 2, calldepth: 2}
 }
 
-var defaultLogger = &logger{param: Param}
+var defaultLogger = &logger{param: Param, skip: 3, calldepth: 3}
 
 func Debug(v ...interface{}) {
 	defaultLogger.Debug(v...)
@@ -181,11 +200,6 @@ var Param = &paramValue{
 var _glogOut = log.New(os.Stdout, "[TRACE] ", log.LstdFlags|log.Lshortfile)
 var _glogErr = log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.Lshortfile)
 var _glogDebug = log.New(os.Stdout, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
-
-func getSource(pc uintptr, file string, line int, ok bool) (uintptr, string, int) {
-
-	return pc, file, line
-}
 
 func getLogFileName(v time.Time) string {
 	logFileName := ""
