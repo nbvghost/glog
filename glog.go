@@ -31,66 +31,54 @@ var glogServer = &GlogTCP{}
 
 type paramValue struct {
 	PushAddr    string
-	Name        string
+	Tag         string
+	AppName     string
 	FormatType  FormatType
 	LogFilePath string
 	StandardOut bool
 	FileStorage bool
 }
 
-var Param = &paramValue{
-	PushAddr:    "",
-	Name:        "default",
-	LogFilePath: "glog",
-	StandardOut: false,
-	FormatType:  CLF,
-	FileStorage: false,
+type logger struct {
+	param *paramValue
 }
 
-var _glogOut = log.New(os.Stdout, "[TRACE] ", log.LstdFlags|log.Lshortfile)
-var _glogErr = log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.Lshortfile)
-var _glogDebug = log.New(os.Stdout, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
-
-func Debug(v ...interface{}) {
-	if Param.StandardOut {
+func (log *logger) Debug(v ...interface{}) {
+	if log.param.StandardOut {
 		_glogDebug.Output(2, fmt.Sprintln(v...))
 	}
 }
-func getSource(pc uintptr, file string, line int, ok bool) (uintptr, string, int) {
-
-	return pc, file, line
-}
-func Panic(err error) {
+func (log *logger) Panic(err error) {
 	pc, file, line := getSource(runtime.Caller(1))
 	if err != nil {
-		out := format(pc, file, line, "PANIC", []interface{}{err.Error()})
-		if Param.StandardOut {
+		out := log.format(pc, file, line, "PANIC", []interface{}{err.Error()})
+		if log.param.StandardOut {
 			_glogDebug.Output(2, out)
 		}
 		panic(err)
 	}
 }
-func Trace(v ...interface{}) {
+func (log *logger) Trace(v ...interface{}) {
 	pc, file, line := getSource(runtime.Caller(1))
 
-	out := format(pc, file, line, "TRACE", v)
+	out := log.format(pc, file, line, "TRACE", v)
 
-	if Param.StandardOut {
+	if log.param.StandardOut {
 		_glogOut.Output(2, out)
 	}
 
 }
 
-func Error(err error) bool {
+func (log *logger) Error(err error) bool {
 	if err != nil {
 		pc, file, line := getSource(runtime.Caller(1))
 
-		out := format(pc, file, line, "ERROR", []interface{}{map[string]interface{}{
+		out := log.format(pc, file, line, "ERROR", []interface{}{map[string]interface{}{
 			"Error": err.Error(),
 			"Stack": string(debug.Stack()),
 		}})
 
-		if Param.StandardOut {
+		if log.param.StandardOut {
 			_glogErr.Output(2, out)
 
 		}
@@ -101,7 +89,7 @@ func Error(err error) bool {
 	}
 }
 
-func format(pc uintptr, file string, line int, level string, values []interface{}) string {
+func (log *logger) format(pc uintptr, file string, line int, level string, values []interface{}) string {
 
 	filePath := ""
 
@@ -112,12 +100,13 @@ func format(pc uintptr, file string, line int, level string, values []interface{
 		filePath = filePaths[len(filePaths)-2] + "/" + filePaths[len(filePaths)-1]
 	}
 
-	if Param.FormatType == JSON {
+	if log.param.FormatType == JSON {
 
 		outs := make(map[string]interface{}, 0)
 		outs["File"] = filePath + ":" + strconv.Itoa(line)
 		outs["Time"] = time.Now().Format("2006-01-02 15:04:05")
-		outs["Name"] = Param.Name
+		outs["AppName"] = log.param.AppName
+		outs["Tag"] = log.param.Tag
 		outs["Level"] = level
 		outs["PC"] = fmt.Sprintf("%x", pc)
 
@@ -142,7 +131,8 @@ func format(pc uintptr, file string, line int, level string, values []interface{
 		outs = append(outs, filePath+":"+strconv.Itoa(line))
 		outs = append(outs, "PC:"+strconv.Itoa(int(pc)))
 		outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
-		outs = append(outs, Param.Name)
+		outs = append(outs, log.param.Tag)
+		outs = append(outs, log.param.AppName)
 		outs = append(outs, values...)
 
 		_logChanQueue <- fmt.Sprintln(outs...)
@@ -152,17 +142,62 @@ func format(pc uintptr, file string, line int, level string, values []interface{
 
 }
 
+func NewLogger(Tag string) *logger {
+	cp := func() paramValue {
+
+		return *Param
+
+	}()
+	cp.Tag = Tag
+	return &logger{param: &cp}
+}
+
+var defaultLogger = &logger{param: Param}
+
+func Debug(v ...interface{}) {
+	defaultLogger.Debug(v...)
+}
+func Panic(err error) {
+	defaultLogger.Panic(err)
+}
+func Trace(v ...interface{}) {
+	defaultLogger.Trace(v...)
+}
+
+func Error(err error) bool {
+	return defaultLogger.Error(err)
+}
+
+var Param = &paramValue{
+	PushAddr:    "",
+	Tag:         "",
+	AppName:     "default",
+	LogFilePath: "glog",
+	StandardOut: false,
+	FormatType:  CLF,
+	FileStorage: false,
+}
+
+var _glogOut = log.New(os.Stdout, "[TRACE] ", log.LstdFlags|log.Lshortfile)
+var _glogErr = log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.Lshortfile)
+var _glogDebug = log.New(os.Stdout, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
+
+func getSource(pc uintptr, file string, line int, ok bool) (uintptr, string, int) {
+
+	return pc, file, line
+}
+
 func getLogFileName(v time.Time) string {
 	logFileName := ""
 	if strings.EqualFold(Param.LogFilePath, "") {
-		logFileName = Param.Name + "/" + v.Format("2006_01_02") + ".log"
-		err := os.MkdirAll(Param.Name, os.ModePerm)
+		logFileName = Param.AppName + "/" + v.Format("2006_01_02") + ".log"
+		err := os.MkdirAll(Param.AppName, os.ModePerm)
 		if err != nil {
 			log.Println(err)
 		}
 	} else {
-		logFileName = Param.LogFilePath + "/" + Param.Name + "/" + v.Format("2006_01_02") + ".log"
-		err := os.MkdirAll(Param.LogFilePath+"/"+Param.Name, os.ModePerm)
+		logFileName = Param.LogFilePath + "/" + Param.AppName + "/" + v.Format("2006_01_02") + ".log"
+		err := os.MkdirAll(Param.LogFilePath+"/"+Param.AppName, os.ModePerm)
 		if err != nil {
 			log.Println(err)
 		}
@@ -306,8 +341,13 @@ func Stop() {
 		logFileWriter.Flush()
 	}
 }
+
+var once = &sync.Once{}
+
 func Start() {
 
-	initGLog()
+	once.Do(func() {
+		initGLog()
+	})
 
 }

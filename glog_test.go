@@ -7,32 +7,29 @@ import (
 
 func TestError(t *testing.T) {
 
-	Param.FileStorage = false
-	Param.StandardOut = true
+	Param.Tag = "dsfsd"
+	Param.AppName = "JSON"
 	Param.FormatType = JSON
+	Param.StandardOut = true
+	Param.FileStorage = true
+
 	Start()
 
-	type args struct {
-		err error
-	}
-	tests := []struct {
-		name string
-		args args
-		want bool
-	}{
-		{name: "Test", args: args{err: errors.New("test error")}, want: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			Error(tt.args.err)
-			Debug("dsfdsf", "dsfdsfsd", "dsfds", map[string]int{"dsfdsfds": 454})
-			Trace(map[string]int{"dsfdsfds": 454})
-			Trace("sdfds", 45454, map[string]int{"dsfdsfds": 454})
-			Panic(tt.args.err)
+	var err = errors.New("dfssdfds")
 
-		})
-	}
+	Error(err)
+	Debug("dsfdsf", "dsfdsfsd", "dsfds", map[string]int{"dsfdsfds": 454})
+	Trace(map[string]int{"dsfdsfds": 454})
+	Trace("sdfds", 45454, map[string]int{"dsfdsfds": 454})
+	//Panic(tt.args.err)
+
+	myLogger := NewLogger("54545")
+	myLogger.Error(err)
+	myLogger.Debug("dsfdsf", "dsfdsfsd", "dsfds", map[string]int{"dsfdsfds": 454})
+	myLogger.Trace(map[string]int{"dsfdsfds": 454})
+	myLogger.Trace("sdfds", 45454, map[string]int{"dsfdsfds": 454})
 
 	for {
+
 	}
 }
