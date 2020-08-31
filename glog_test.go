@@ -7,8 +7,10 @@ import (
 
 func TestError(t *testing.T) {
 
-	Param.FileStorage = true
-	StartLogger(Param)
+	Param.FileStorage = false
+	Param.StandardOut = true
+	Param.FormatType = JSON
+	Start()
 
 	type args struct {
 		err error
@@ -22,13 +24,15 @@ func TestError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			//Error(tt.args.err)
-			//Debug("dsfdsf")
-			//Panic(tt.args.err)
-			Trace("dsfds", map[string]int{"dsfdsfds": 454})
+			Error(tt.args.err)
+			Debug("dsfdsf", "dsfdsfsd", "dsfds", map[string]int{"dsfdsfds": 454})
+			Trace(map[string]int{"dsfdsfds": 454})
+			Trace("sdfds", 45454, map[string]int{"dsfdsfds": 454})
+			Panic(tt.args.err)
 
 		})
 	}
 
-	select {}
+	for {
+	}
 }

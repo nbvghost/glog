@@ -63,18 +63,21 @@ func getSource(pc uintptr, file string, line int, ok bool) (uintptr, string, int
 func Panic(err error) {
 	pc, file, line := getSource(runtime.Caller(1))
 	if err != nil {
-		format(pc, file, line, "PANIC", []interface{}{err.Error()})
+		out := format(pc, file, line, "PANIC", []interface{}{err.Error()})
+		if Param.StandardOut {
+			_glogDebug.Output(2, out)
+		}
 		panic(err)
 	}
 }
 func Trace(v ...interface{}) {
 	pc, file, line := getSource(runtime.Caller(1))
 
-	if Param.StandardOut {
-		_glogOut.Output(2, fmt.Sprintln(v...))
-	}
+	out := format(pc, file, line, "TRACE", v)
 
-	format(pc, file, line, "TRACE", v)
+	if Param.StandardOut {
+		_glogOut.Output(2, out)
+	}
 
 }
 
@@ -82,12 +85,15 @@ func Error(err error) bool {
 	if err != nil {
 		pc, file, line := getSource(runtime.Caller(1))
 
+		out := format(pc, file, line, "ERROR", []interface{}{map[string]interface{}{
+			"Error": err.Error(),
+			"Stack": string(debug.Stack()),
+		}})
+
 		if Param.StandardOut {
-			_glogErr.Output(2, fmt.Sprintln(err)+string(debug.Stack()))
+			_glogErr.Output(2, out)
 
 		}
-
-		format(pc, file, line, "ERROR", []interface{}{err.Error()})
 
 		return true
 	} else {
@@ -95,7 +101,7 @@ func Error(err error) bool {
 	}
 }
 
-func format(pc uintptr, file string, line int, level string, values []interface{}) {
+func format(pc uintptr, file string, line int, level string, values []interface{}) string {
 
 	filePath := ""
 
@@ -115,27 +121,33 @@ func format(pc uintptr, file string, line int, level string, values []interface{
 		outs["Level"] = level
 		outs["PC"] = fmt.Sprintf("%x", pc)
 
-		logs := make(map[int]interface{})
-		for i := 0; i < len(values); i++ {
-			logs[i] = values[i]
+		if len(values) == 1 {
+			outs["Logs"] = values[0]
+		} else {
+			logs := make(map[int]interface{})
+			for i := 0; i < len(values); i++ {
+				logs[i] = values[i]
+			}
+			outs["Logs"] = logs
 		}
-
-		outs["Logs"] = logs
 
 		b, _ := json.Marshal(outs)
 
 		_logChanQueue <- fmt.Sprintln(string(b))
 
+		return fmt.Sprintln(string(b))
+
 	} else {
 		outs := make([]interface{}, 0)
 		outs = append(outs, filePath+":"+strconv.Itoa(line))
-		outs = append(outs, line)
-		outs = append(outs, "pc:"+strconv.Itoa(int(pc)))
+		outs = append(outs, "PC:"+strconv.Itoa(int(pc)))
 		outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
 		outs = append(outs, Param.Name)
 		outs = append(outs, values...)
 
 		_logChanQueue <- fmt.Sprintln(outs...)
+
+		return fmt.Sprintln(outs...)
 	}
 
 }
