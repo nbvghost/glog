@@ -41,6 +41,7 @@ type paramValue struct {
 	LogFilePath string
 	StandardOut bool
 	FileStorage bool
+	ShowHeader  bool
 }
 
 type logger struct {
@@ -362,7 +363,7 @@ func Start() {
 
 	once.Do(func() {
 
-		if Param.FormatType == JSON {
+		if Param.FormatType == JSON && Param.ShowHeader == false {
 			_glogOut = log.New(os.Stdout, "", 0)
 			_glogErr = log.New(os.Stderr, "", 0)
 			_glogDebug = log.New(os.Stdout, "", 0)
