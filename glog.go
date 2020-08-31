@@ -29,6 +29,10 @@ var _logServerStatus = make(chan bool)
 
 var glogServer = &GlogTCP{}
 
+var _glogOut = log.New(os.Stdout, "[TRACE] ", log.LstdFlags|log.Lshortfile)
+var _glogErr = log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.Lshortfile)
+var _glogDebug = log.New(os.Stdout, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
+
 type paramValue struct {
 	PushAddr    string
 	Tag         string
@@ -55,9 +59,9 @@ func (log *logger) Panic(err error) {
 	if err != nil {
 		out := log.format(pc, file, line, "PANIC", []interface{}{err.Error()})
 		if log.param.StandardOut {
-			_glogDebug.Output(log.calldepth, out)
+			_glogErr.Output(log.calldepth, out)
 		}
-		panic(err)
+		os.Exit(1)
 	}
 }
 func (log *logger) Trace(v ...interface{}) {
@@ -135,12 +139,12 @@ func (log *logger) format(pc uintptr, file string, line int, level string, value
 
 	} else {
 		outs := make([]interface{}, 0)
-		outs = append(outs, filePath+":"+strconv.Itoa(line))
+		//outs = append(outs, filePath+":"+strconv.Itoa(line))
 		outs = append(outs, "PC:"+strconv.Itoa(int(pc)))
-		outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
+		//outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
+		outs = append(outs, level)
 		outs = append(outs, log.param.AppName)
 		outs = append(outs, log.param.Tag)
-		outs = append(outs, log.param.AppName)
 		outs = append(outs, version)
 		outs = append(outs, values...)
 
@@ -196,10 +200,6 @@ var Param = &paramValue{
 	FormatType:  CLF,
 	FileStorage: false,
 }
-
-var _glogOut = log.New(os.Stdout, "[TRACE] ", log.LstdFlags|log.Lshortfile)
-var _glogErr = log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.Lshortfile)
-var _glogDebug = log.New(os.Stdout, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
 
 func getLogFileName(v time.Time) string {
 	logFileName := ""
@@ -361,6 +361,13 @@ var once = &sync.Once{}
 func Start() {
 
 	once.Do(func() {
+
+		if Param.FormatType == JSON {
+			_glogOut = log.New(os.Stdout, "", 0)
+			_glogErr = log.New(os.Stderr, "", 0)
+			_glogDebug = log.New(os.Stdout, "", 0)
+		}
+
 		initGLog()
 	})
 
