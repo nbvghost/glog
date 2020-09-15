@@ -22,7 +22,6 @@ const PanicLeveL Level = 1 << 3
 const MoreDebugLevel Level = DebugLevel | TraceLevel | ErrorLevel | PanicLeveL
 const MoreTraceLevel Level = TraceLevel | ErrorLevel | PanicLeveL
 const MoreErrorLevel Level = ErrorLevel | PanicLeveL
-const MorePanicLeveL Level = PanicLeveL
 
 type Level int
 
