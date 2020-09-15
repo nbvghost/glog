@@ -14,6 +14,18 @@ import (
 	"time"
 )
 
+const DebugLevel Level = 1
+const TraceLevel Level = 1 << 1
+const ErrorLevel Level = 1 << 2
+const PanicLeveL Level = 1 << 3
+
+const MoreDebugLevel Level = DebugLevel | TraceLevel | ErrorLevel | PanicLeveL
+const MoreTraceLevel Level = TraceLevel | ErrorLevel | PanicLeveL
+const MoreErrorLevel Level = ErrorLevel | PanicLeveL
+const MorePanicLeveL Level = PanicLeveL
+
+type Level int
+
 type FormatType string
 
 const CLF FormatType = "CLF"
@@ -42,6 +54,7 @@ type paramValue struct {
 	StandardOut bool
 	FileStorage bool
 	ShowHeader  bool
+	Level       Level
 }
 
 type logger struct {
@@ -51,50 +64,57 @@ type logger struct {
 }
 
 func (log *logger) Debug(v ...interface{}) {
-	if log.param.StandardOut {
+	if log.param.Level&DebugLevel == DebugLevel {
 		_glogDebug.Output(log.calldepth, fmt.Sprintln(v...))
 	}
 }
-func (log *logger) Panic(err error) {
-	pc, file, line := log.getSource()
-	if err != nil {
-		out := log.format(pc, file, line, "PANIC", []interface{}{err.Error()})
-		if log.param.StandardOut {
-			_glogErr.Output(log.calldepth, out)
-		}
-		os.Exit(1)
-	}
-}
 func (log *logger) Trace(v ...interface{}) {
-	pc, file, line := log.getSource()
-
-	out := log.format(pc, file, line, "TRACE", v)
-
-	if log.param.StandardOut {
-		_glogOut.Output(log.calldepth, out)
+	if log.param.Level&TraceLevel == TraceLevel {
+		pc, file, line := log.getSource()
+		out := log.format(pc, file, line, "TRACE", v)
+		if log.param.StandardOut {
+			_glogOut.Output(log.calldepth, out)
+		}
 	}
 
 }
 
 func (log *logger) Error(err error) bool {
+
 	if err != nil {
-		pc, file, line := log.getSource()
-
-		out := log.format(pc, file, line, "ERROR", []interface{}{map[string]interface{}{
-			"Error": err.Error(),
-			"Stack": string(debug.Stack()),
-		}})
-
-		if log.param.StandardOut {
-			_glogErr.Output(log.calldepth, out)
-
+		if log.param.Level&ErrorLevel == ErrorLevel {
+			pc, file, line := log.getSource()
+			out := log.format(pc, file, line, "ERROR", []interface{}{map[string]interface{}{
+				"ErrorMessage": err.Error(),
+				"Stack":        string(debug.Stack()),
+			}})
+			if log.param.StandardOut {
+				_glogErr.Output(log.calldepth, out)
+			}
 		}
-
 		return true
 	} else {
 		return false
 	}
 }
+
+func (log *logger) Panic(err error) {
+	if log.param.Level&PanicLeveL == PanicLeveL {
+		pc, file, line := log.getSource()
+		if err != nil {
+			out := log.format(pc, file, line, "PANIC", []interface{}{map[string]interface{}{
+				"ErrorMessage": err.Error(),
+				"Stack":        string(debug.Stack()),
+			}})
+			if log.param.StandardOut {
+				_glogErr.Output(log.calldepth, out)
+			}
+			os.Exit(1)
+		}
+	}
+
+}
+
 func (log *logger) getSource() (uintptr, string, int) {
 	pc, file, line, _ := runtime.Caller(log.skip)
 	return pc, file, line
@@ -143,7 +163,6 @@ func (log *logger) format(pc uintptr, file string, line int, level string, value
 		//outs = append(outs, filePath+":"+strconv.Itoa(line))
 		outs = append(outs, "PC:"+strconv.Itoa(int(pc)))
 		//outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
-		outs = append(outs, level)
 		outs = append(outs, log.param.AppName)
 		outs = append(outs, log.param.Tag)
 		outs = append(outs, version)
@@ -200,6 +219,7 @@ var Param = &paramValue{
 	StandardOut: false,
 	FormatType:  CLF,
 	FileStorage: false,
+	Level:       TraceLevel,
 }
 
 func getLogFileName(v time.Time) string {
