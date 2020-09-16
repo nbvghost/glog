@@ -64,7 +64,11 @@ type logger struct {
 
 func (log *logger) Debug(v ...interface{}) {
 	if log.param.Level&DebugLevel == DebugLevel {
-		_glogDebug.Output(log.calldepth, fmt.Sprintln(v...))
+		pc, file, line := log.getSource()
+		out := log.format(pc, file, line, "DEBUG", v)
+		if log.param.StandardOut {
+			_glogDebug.Output(log.calldepth, out)
+		}
 	}
 }
 func (log *logger) Trace(v ...interface{}) {
