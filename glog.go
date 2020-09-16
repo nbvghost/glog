@@ -222,7 +222,7 @@ var Param = &paramValue{
 	StandardOut: false,
 	FormatType:  CLF,
 	FileStorage: false,
-	Level:       TraceLevel,
+	Level:       MoreTraceLevel,
 }
 
 func getLogFileName(v time.Time) string {
