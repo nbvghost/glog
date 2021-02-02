@@ -15,12 +15,14 @@ import (
 )
 
 const DebugLevel Level = 1
-const TraceLevel Level = 1 << 1
-const ErrorLevel Level = 1 << 2
-const PanicLeveL Level = 1 << 3
+const TraceLevel Level = 1 << 1   //1*2(1次方)
+const ErrorLevel Level = 1 << 2   //1*2(2次方)
+const WarningLevel Level = 1 << 3 //1*2(3次方)
+const PanicLeveL Level = 1 << 4   //1*2(4次方)
 
-const MoreDebugLevel Level = DebugLevel | TraceLevel | ErrorLevel | PanicLeveL
-const MoreTraceLevel Level = TraceLevel | ErrorLevel | PanicLeveL
+const AllLevel Level = DebugLevel | TraceLevel | WarningLevel | ErrorLevel | PanicLeveL
+const MoreTraceLevel Level = TraceLevel | WarningLevel | ErrorLevel | PanicLeveL
+const MoreWarningLevel Level = WarningLevel | ErrorLevel | PanicLeveL
 const MoreErrorLevel Level = ErrorLevel | PanicLeveL
 
 type Level int
@@ -41,6 +43,7 @@ var _logServerStatus = make(chan bool)
 var glogServer = &GlogTCP{}
 
 var _glogOut = log.New(os.Stdout, "[TRACE] ", log.LstdFlags|log.Lshortfile)
+var _glogWarning = log.New(os.Stdout, "[WARNING] ", log.LstdFlags|log.Lshortfile)
 var _glogErr = log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.Lshortfile)
 var _glogDebug = log.New(os.Stdout, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
 
@@ -56,41 +59,51 @@ type paramValue struct {
 	Level       Level
 }
 
-type logger struct {
+type Logger struct {
 	param     *paramValue
 	skip      int
 	calldepth int
 }
 
-func (log *logger) Debug(v ...interface{}) {
+func (log *Logger) Debug(v ...interface{}) {
 	if log.param.Level&DebugLevel == DebugLevel {
-		pc, file, line := log.getSource()
-		out := log.format(pc, file, line, "DEBUG", v)
+		_, file, line := log.getSource()
+		out := log.format(file, line, "DEBUG", v)
 		if log.param.StandardOut {
 			_glogDebug.Output(log.calldepth, out)
 		}
 	}
 }
-func (log *logger) Trace(v ...interface{}) {
+
+func (log *Logger) Trace(v ...interface{}) {
 	if log.param.Level&TraceLevel == TraceLevel {
-		pc, file, line := log.getSource()
-		out := log.format(pc, file, line, "TRACE", v)
+		_, file, line := log.getSource()
+		out := log.format(file, line, "TRACE", v)
 		if log.param.StandardOut {
 			_glogOut.Output(log.calldepth, out)
 		}
 	}
 
 }
-
-func (log *logger) Error(err error) bool {
+func (log *Logger) Warning(v ...interface{}) {
+	if log.param.Level&WarningLevel == WarningLevel {
+		_, file, line := log.getSource()
+		out := log.format(file, line, "WARNING", v)
+		if log.param.StandardOut {
+			_glogWarning.Output(log.calldepth, out)
+		}
+	}
+}
+func (log *Logger) Error(err error) bool {
 
 	if err != nil {
 		if log.param.Level&ErrorLevel == ErrorLevel {
-			pc, file, line := log.getSource()
-			out := log.format(pc, file, line, "ERROR", []interface{}{map[string]interface{}{
+			_, file, line := log.getSource()
+			out := log.format(file, line, "ERROR", []interface{}{map[string]interface{}{
 				"ErrorMessage": err.Error(),
 				"Stack":        string(debug.Stack()),
 			}})
+
 			if log.param.StandardOut {
 				_glogErr.Output(log.calldepth, out)
 			}
@@ -101,11 +114,11 @@ func (log *logger) Error(err error) bool {
 	}
 }
 
-func (log *logger) Panic(err error) {
+func (log *Logger) Panic(err error) {
 	if log.param.Level&PanicLeveL == PanicLeveL {
-		pc, file, line := log.getSource()
+		_, file, line := log.getSource()
 		if err != nil {
-			out := log.format(pc, file, line, "PANIC", []interface{}{map[string]interface{}{
+			out := log.format(file, line, "PANIC", []interface{}{map[string]interface{}{
 				"ErrorMessage": err.Error(),
 				"Stack":        string(debug.Stack()),
 			}})
@@ -118,15 +131,15 @@ func (log *logger) Panic(err error) {
 
 }
 
-func (log *logger) getSource() (uintptr, string, int) {
+func (log *Logger) getSource() (uintptr, string, int) {
 	pc, file, line, _ := runtime.Caller(log.skip)
 	return pc, file, line
 }
-func (log *logger) getSourceByZero() (uintptr, string, int) {
+func (log *Logger) getSourceByZero() (uintptr, string, int) {
 	pc, file, line, _ := runtime.Caller(0)
 	return pc, file, line
 }
-func (log *logger) format(pc uintptr, file string, line int, level string, values []interface{}) string {
+func (log *Logger) format(file string, line int, level string, values []interface{}) string {
 
 	filePath := getLastTowPath(file)
 
@@ -143,7 +156,6 @@ func (log *logger) format(pc uintptr, file string, line int, level string, value
 		outs["Tag"] = log.param.Tag
 		outs["Level"] = level
 		outs["Version"] = version
-		outs["PC"] = fmt.Sprintf("%x", pc)
 
 		if len(values) == 1 {
 			outs["Logs"] = values[0]
@@ -157,19 +169,21 @@ func (log *logger) format(pc uintptr, file string, line int, level string, value
 
 		b, _ := json.Marshal(outs)
 
-		_logChanQueue <- fmt.Sprintln(string(b))
+		o := fmt.Sprintln(string(b))
+		_logChanQueue <- o
 
-		return fmt.Sprintln(string(b))
-
+		return o
 	} else {
 		outs := make([]interface{}, 0)
 		//outs = append(outs, filePath+":"+strconv.Itoa(line))
-		outs = append(outs, "PC:"+strconv.Itoa(int(pc)))
+		//outs = append(outs, "PC:"+strconv.Itoa(int(pc)))
 		//outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
 		outs = append(outs, log.param.AppName)
 		outs = append(outs, log.param.Tag)
 		outs = append(outs, version)
-		outs = append(outs, values...)
+
+		b, _ := json.Marshal(values)
+		outs = append(outs, string(b))
 
 		_logChanQueue <- fmt.Sprintln(outs...)
 
@@ -188,17 +202,17 @@ func getLastTowPath(file string) string {
 	}
 	return filePath
 }
-func NewLogger(Tag string) *logger {
+func NewLogger(Tag string) *Logger {
 	cp := func() paramValue {
 
 		return *Param
 
 	}()
 	cp.Tag = Tag
-	return &logger{param: &cp, skip: 2, calldepth: 2}
+	return &Logger{param: &cp, skip: 2, calldepth: 2}
 }
 
-var defaultLogger = &logger{param: Param, skip: 3, calldepth: 3}
+var defaultLogger = &Logger{param: Param, skip: 3, calldepth: 3}
 
 func Debug(v ...interface{}) {
 	defaultLogger.Debug(v...)
@@ -209,9 +223,19 @@ func Panic(err error) {
 func Trace(v ...interface{}) {
 	defaultLogger.Trace(v...)
 }
-
+func Warning(v ...interface{}) {
+	defaultLogger.Warning(v...)
+}
 func Error(err error) bool {
 	return defaultLogger.Error(err)
+}
+func CheckError(err error) bool {
+	if err != nil {
+		return true
+	} else {
+		return false
+	}
+
 }
 
 var Param = &paramValue{
@@ -375,6 +399,13 @@ func initGLog() {
 	wait.Wait()
 }
 func Stop() {
+	for {
+		if len(_logChanQueue) > 0 || len(_logFileTempChan) > 0 {
+			time.Sleep(time.Second)
+		} else {
+			break
+		}
+	}
 	if logFileWriter != nil {
 		logFileWriter.Flush()
 	}
@@ -388,8 +419,9 @@ func Start() {
 
 		if Param.FormatType == JSON && Param.ShowHeader == false {
 			_glogOut = log.New(os.Stdout, "", 0)
-			_glogErr = log.New(os.Stderr, "", 0)
 			_glogDebug = log.New(os.Stdout, "", 0)
+			_glogErr = log.New(os.Stderr, "", 0)
+			_glogWarning = log.New(os.Stderr, "", 0)
 		}
 
 		initGLog()
