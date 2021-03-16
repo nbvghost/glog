@@ -9,10 +9,11 @@ func TestError(t *testing.T) {
 
 	Param.Tag = "dsfsd"
 	Param.AppName = "JSON"
-	Param.FormatType = JSON
+	Param.FormatType = CLF
 	Param.StandardOut = true
 	Param.FileStorage = true
 	Param.ShowHeader = true
+	Param.Level = AllLevel
 
 	Start()
 
@@ -22,6 +23,8 @@ func TestError(t *testing.T) {
 	Debug("dsfdsf", "dsfdsfsd", "dsfds", map[string]int{"dsfdsfds": 454})
 	Trace(map[string]int{"dsfdsfds": 454})
 	Trace("sdfds", 45454, map[string]int{"dsfdsfds": 454})
+	Warning(err)
+	CheckError(err)
 	Panic(err)
 
 	myLogger := NewLogger("54545")
