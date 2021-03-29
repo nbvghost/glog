@@ -1,5 +1,4 @@
 # glog
-
 高并发日志记录组件
 日志服务器不可用时，打印到文件中，按天分
 可以开启debug模式，可以选择打印栈
@@ -17,6 +16,6 @@
   Host: www.abc.com
   Content-Type: application/json
   Cache-Control: no-cache
-  
+    
   {"JSON":"text"}
 ```
