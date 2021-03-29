@@ -12,7 +12,6 @@
 -- logserver:日志服务器地址，glog把日志post到这个地址上，由开发者自己保存
 
 # post例子：
-
 ``` http
   POST /log/server HTTP/1.1
   Host: www.abc.com
