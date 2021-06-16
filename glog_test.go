@@ -9,7 +9,7 @@ func TestError(t *testing.T) {
 
 	Param.Tag = "dsfsd"
 	Param.AppName = "JSON"
-	Param.FormatType = CLF
+	Param.FormatType = MLF
 	Param.StandardOut = true
 	Param.FileStorage = true
 	Param.ShowHeader = true

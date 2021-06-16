@@ -29,8 +29,11 @@ type Level int
 
 type FormatType string
 
-const CLF FormatType = "CLF"
-const JSON FormatType = "JSON"
+const (
+	MLF  FormatType = "MLF"
+	CLF  FormatType = "CLF"
+	JSON FormatType = "JSON"
+)
 
 //queue
 //日志列对
@@ -173,7 +176,7 @@ func (log *Logger) format(file string, line int, level string, values []interfac
 		_logChanQueue <- o
 
 		return o
-	} else {
+	} else if log.param.FormatType == CLF {
 		outs := make([]interface{}, 0)
 		//outs = append(outs, filePath+":"+strconv.Itoa(line))
 		//outs = append(outs, "PC:"+strconv.Itoa(int(pc)))
@@ -184,6 +187,20 @@ func (log *Logger) format(file string, line int, level string, values []interfac
 
 		b, _ := json.Marshal(values)
 		outs = append(outs, string(b))
+
+		_logChanQueue <- fmt.Sprintln(outs...)
+
+		return fmt.Sprintln(outs...)
+	} else {
+		outs := make([]interface{}, 0)
+		//outs = append(outs, filePath+":"+strconv.Itoa(line))
+		//outs = append(outs, "PC:"+strconv.Itoa(int(pc)))
+		//outs = append(outs, time.Now().Format("2006-01-02 15:04:05"))
+		outs = append(outs, log.param.AppName)
+		outs = append(outs, log.param.Tag)
+		outs = append(outs, version)
+
+		outs = append(outs, values...)
 
 		_logChanQueue <- fmt.Sprintln(outs...)
 
@@ -244,7 +261,7 @@ var Param = &paramValue{
 	AppName:     "default",
 	LogFilePath: "glog",
 	StandardOut: false,
-	FormatType:  CLF,
+	FormatType:  MLF,
 	FileStorage: false,
 	Level:       MoreTraceLevel,
 }
